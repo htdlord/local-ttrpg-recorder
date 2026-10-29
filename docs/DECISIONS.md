@@ -61,3 +61,26 @@ Added beyond the review:
 - **CUDA extra stays** although the reference machine works without it (system CUDA 12.8 + cuDNN 9.27 on PATH; ctranslate2 wheel ships `cudnn64_9.dll`). M6 task: verify on a clean environment without system CUDA in PATH that the extra alone is sufficient (SPEC §13).
 - **CI triggers:** `push` only on `main`; every other branch is tested via `pull_request`; concurrency group per ref with `cancel-in-progress: true`.
 - **Known upstream warning:** sounddevice 0.5.6 sets `ndarray.shape`, deprecated in numpy 2.5; filtered in the pytest config by message and module only.
+
+## 2026-10-29 – M0 hardware acceptance (reference machine)
+
+30-minute `record-probe`, 8 channels, 48 kHz, int32 → FLAC PCM_24, Windows 10, UMC1820. Both host APIs meet the full criterion; **M0 hardware acceptance passed.**
+
+| | ASIO (`UMC ASIO Driver`) | WASAPI shared (`IN 01-08`) |
+|---|---|---|
+| Result | PASS | PASS |
+| Duration (wall clock) | 1800.0 s | 1799.9 s |
+| Frames received = per channel = written | 86 403 072 (all 8) | 86 398 080 (all 8) |
+| Blocks / latency | 42 189 / 0.044 s | 179 996 / 0.022 s |
+| Overflow / underflow / other flags | 0 / 0 / 0 | 0 / 0 / 0 |
+| Ring buffer max fill / dropped | 0.09 s of 10 s / 0 | 0.02 s of 10 s / 0 |
+| Max file write | 103.7 ms | 6.1 ms |
+| Timestamp discontinuities | 0 | 0 |
+| Jitter median / p99 / max | 0.33 / 1.33 / 1.33 ms | 0.51 / 1.70 / 2.78 ms |
+| Clock vs wall clock (info) | +1.2 ppm | +1.1 ppm |
+
+Notes:
+- The largest single write (103.7 ms, ASIO with ~2048-frame blocks) is ~1 % of the 10 s ring buffer; the buffer size is ample. Revisit headroom for the M5 recorder under slow-disk fault injection.
+- Clock deviation is far below the 200 ppm WARN threshold on both APIs.
+- Levels were informational (no defined input signal): channels 2–3 at about −90…−96 dBFS RMS look unconnected/at minimum gain; channel 1 peaked at −0.0 dBFS on the ASIO run (clipping on a transient). Neither affects the probe verdict; gain staging is a setup task, and a clipping indicator belongs in the M5 recorder level meters.
+- Device was auto-selected on both runs (allowed for probe only, see above).
