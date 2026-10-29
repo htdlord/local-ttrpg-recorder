@@ -19,10 +19,10 @@ from sessionscribe.core.bench.reference import Reference, read_reference
 from sessionscribe.core.bench.resources import GpuSampler
 from sessionscribe.core.fileio import atomic_write_json, atomic_write_text
 
-# The default mode stays "quality" if, on the default configuration, its projected time
-# for 10 h of speech is within this budget and its WER is at most this much worse.
+# The default mode stays "quality" unless, on the default configuration, the best fast
+# cell beats its WER by more than this (owner decision: accuracy decides; a session may
+# take several hours). Processing time is reported for information only.
 PROJECTION_SPEECH_H = 10.0
-QUALITY_BUDGET_MIN = 60.0
 WER_TOLERANCE = 0.01  # 1 percentage point
 DEFAULT_CONFIG = ("large-v3", "float16", True)
 
@@ -303,9 +303,7 @@ def recommend_mode(cells: list[dict[str, Any]], clip_seconds: float) -> dict[str
     timed = [c for c in qualities if c["derived"].get("projected_min") is not None]
     quality = min(timed, key=lambda c: c["derived"]["projected_min"]) if timed else qualities[0]
     projected = quality["derived"].get("projected_min")
-    keep = (
-        projected is not None and projected <= QUALITY_BUDGET_MIN and q_wer <= f_wer + WER_TOLERANCE
-    )
+    keep = q_wer <= f_wer + WER_TOLERANCE
     return {
         "decision": "quality" if keep else "revisit",
         "provisional": True,
@@ -315,7 +313,6 @@ def recommend_mode(cells: list[dict[str, Any]], clip_seconds: float) -> dict[str
         "best_fast_cell": best_fast["name"],
         "quality_cell": quality["name"],
         "quality_projected_min": projected,
-        "budget_min": QUALITY_BUDGET_MIN,
         "wer_tolerance": WER_TOLERANCE,
     }
 
@@ -392,7 +389,7 @@ def results_markdown(results: dict[str, Any]) -> str:
             f"quality WER {_pct(rec['quality_wer'])} % vs best fast {_pct(rec['best_fast_wer'])} % "
             f"({rec['best_fast_cell']}), quality projection {rec['quality_projected_min']} min "
             f"({rec.get('quality_cell', 'quality')}) "
-            f"(budget {rec['budget_min']:.0f} min, tolerance {100 * rec['wer_tolerance']:.0f} pp)."
+            f"(information only; WER decides, tolerance {100 * rec['wer_tolerance']:.0f} pp)."
         )
     elif rec:
         lines.append(f"Default mode: no decision ({rec.get('reason')}).")

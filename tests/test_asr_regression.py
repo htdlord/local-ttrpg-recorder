@@ -72,7 +72,7 @@ def full_speech(monkeypatch):
 
 def strict(mode):
     """Thresholds that every decode fails, so quality mode must walk the temperatures."""
-    preset = "fast-draft" if mode == "fast" else "conversation"
+    preset = "fast" if mode == "fast" else "conversation"
     return load_settings(
         preset=preset,
         cli={
@@ -141,7 +141,7 @@ def test_fast_mode_overrides_options(whisper, monkeypatch, full_speech):
 def test_fast_mode_keeps_vad_options_object_but_overrides_dict(whisper, full_speech):
     from faster_whisper import BatchedInferencePipeline
 
-    settings = load_settings(preset="fast-draft", cli={"model": {"id": "tiny"}})
+    settings = load_settings(preset="fast", cli={"model": {"id": "tiny"}})
     pipeline = BatchedInferencePipeline(whisper)
     ours = vad_options(settings.vad)
     list(pipeline.transcribe(noise(), language="en", batch_size=2, vad_parameters=ours)[0])
