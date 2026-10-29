@@ -69,7 +69,7 @@ Two inference modes, because they do not honour the same parameters:
 
 Each setting declares which modes it applies to; the GUI disables (with tooltip) settings that the selected mode ignores, and the CLI warns. A regression test pins this behaviour against the locked faster-whisper version.
 
-Rationale for `quality` as default: after VAD a typical player track is mostly silence, so 8 × 6.5 h of tracks is on the order of 10 h of actual speech; sequential large-v3 float16 on the reference GPU is expected to finish a session in well under an hour. To be confirmed by the M1 benchmark; if wrong, revisit.
+Rationale for `quality` as default (owner decision after the M1 benchmark): accuracy decides, and processing a session in several hours is acceptable. The default stays `quality` unless `fast` is better by more than 1 percentage point WER on the default configuration; processing time is reported for information only. M1 measured about 1.8 h for 10 h of speech in `quality` mode (large-v3 float16, reference GPU). Processing tracks in parallel gains only about 8 %. The built-in `fast` preset (large-v3, batch 4) is the optional faster choice: about 2.4× faster at +3 pp WER.
 
 Later option (not v1): hybrid – `fast` first pass, `quality` re-run on flagged passages only.
 
@@ -193,6 +193,8 @@ Layered, each layer with its own key; files written atomically (temp file + rena
 
 File fingerprint: size + mtime + hash of first/last MB (fast), full hash optional.
 
+**Crashing workers.** ASR runs in child processes. An unexpected child exit (non-zero exit code, e.g. Windows 0xC0000005, a signal, or a missing result) fails only that chunk: completed chunks stay valid in the cache, partial files of the failed chunk are discarded, and the chunk is re-run **once**. A second failure stops processing with a clear error: track, chunk range, decoded exit code, likely cause and a hint. The cache stays consistent, so a later run resumes after the completed chunks. Crashes and retries are recorded in the log and in `processing_events` in the JSON output.
+
 ## 6. Data model (JSON output)
 
 ```jsonc
@@ -307,7 +309,7 @@ Bleed handling is always compared against `bleed_mode=off` on the same clips.
 |---|---|---|
 | M0 | Skeleton: uv, ruff, pytest, pre-commit, **CI (lint + fast tests)**, docs; `doctor` (versions, supported compute types, real short inference, audio host APIs, open N-ch stream); **`record-probe` CLI**: 8-ch raw recording for N minutes, reports sample counts/overflows | CI green; `doctor` passes on reference machine; 30-min 8-ch probe via ASIO and WASAPI with zero overflow and matching sample counts |
 | M1 | Single-file ASR CLI, full settings model, presets, both ASR modes with mode-aware params, VAD preset, initial_prompt/hotwords pass-through; bench harness; reference clips prepared | Regression test confirms batched-mode parameter behaviour; benchmark matrix (large-v3 / turbo × float16 / int8_float16 × batch 4/8/16 × word ts × mode) recorded on a HU clip; default mode confirmed |
-| M2 | Multi-track: participants, offsets, time model, chunking with owned/context ranges, layered cache, merge, all exporters, quality flags | Chunk-boundary tests pass; re-export / rename / offset change (post mode) without re-ASR; stable segment ids; 8 synthetic tracks + real clips merge correctly |
+| M2 | Multi-track: participants, offsets, time model, chunking with owned/context ranges, layered cache, merge, all exporters, quality flags | Chunk-boundary tests pass; re-export / rename / offset change (post mode) without re-ASR; stable segment ids; 8 synthetic tracks + real clips merge correctly; a crashing worker process (simulated) is detected, its chunk re-run once from the cache, a second crash gives a clear error with the cache left consistent (§5.7) |
 | M3 | Coupling (auto + guided), ownership, post/pre modes, dedup with evidence rules, overlap marking | On the reference set vs `off`: speech recall does not drop beyond an agreed tolerance, no hand-marked overlap is lost silently, residual duplicates substantially reduced; tolerances fixed from first measurements and written to DECISIONS |
 | M4 | GUI: Session, Settings, Run, Result (review + playback), i18n, themes | Full workflow A from GUI; cancel + resume; flagged items reviewable |
 | M5 | Recorder: device/channel browser with explicit device + host API selection saved in the manifest (§8.1), meters, guided mic check, segmented writer, manifest, recovery | 8 h, 8-ch recording on reference machine without loss; fault injection: device unplug, low disk, slowed disk writes, process kill → manifest correctly reports what exists and what is missing; restart recovery works |
@@ -320,6 +322,6 @@ Live transcription; campaign glossary + post-correction list; hybrid fast/qualit
 ## 15. Open questions
 
 - Default ownership margin and attenuation – measured in M3.
-- Default ASR mode – provisional M1 decision on a 109 s clip; repeat with a ≥ 5 min clip (§11.1) before the M3 tolerances are fixed.
+- Default ASR mode – `quality` (decided by WER). Confirm the WER comparison on the verified reference and a ≥ 5 min clip (§11.1) before the M3 tolerances are fixed.
 - Recording segment length (5 min default) – confirm in M5.
 - Project name.
