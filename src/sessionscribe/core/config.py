@@ -409,17 +409,24 @@ def load_settings(
     overrides: Iterable[str] = (),
     cli: Mapping[str, Any] | None = None,
     user_presets: Path | None = None,
+    session: Mapping[str, Any] | None = None,
+    session_preset: str | None = None,
 ) -> Settings:
-    """Resolve settings from all layers; raises ``ValueError`` / ``ValidationError``."""
+    """Resolve settings from all layers; raises ``ValueError`` / ``ValidationError``.
+
+    Layers: preset -> config file -> session ``[settings]`` -> ``--set`` -> CLI flags.
+    """
     data: dict[str, Any] = {}
     file_data: dict[str, Any] = {}
     if config_path is not None:
         file_data = migrate(read_toml(config_path))
-    # A config file may name its own preset; an explicit preset argument wins.
-    preset_name = preset if preset is not None else file_data.get("preset")
+    # An explicit preset argument wins over the session's, which wins over the config file's.
+    preset_name = preset if preset is not None else session_preset or file_data.get("preset")
     if preset_name:
         data = deep_merge(data, load_preset(preset_name, user_presets))
     data = deep_merge(data, file_data)
+    if session:
+        data = deep_merge(data, session)
     for item in overrides:
         data = deep_merge(data, parse_override(item))
     if cli:
