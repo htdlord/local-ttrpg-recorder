@@ -196,3 +196,19 @@ Matrix `parallel` (also part of `m1`): large-v3 float16 quality with word timest
 
 - [ ] Re-score `work/bench/20261029-212243` and `work/bench/20261029-214701` with the hand-corrected, verified clip01 reference (`bench score`); record the numbers, then merge PR #2.
 - [ ] Repeat the M1 benchmark (incl. `parallel`) with a ≥ 5 min clip (SPEC §11.1) and settle the default ASR mode; required before the M3 tolerances are fixed.
+
+## 2026-10-29 – Default ASR mode decided by WER (owner decision)
+
+- **`quality` stays the default mode.** This supersedes the M1 default-mode criterion above. Processing that takes several hours is acceptable to the owner, so the 60 min budget is **no longer a criterion**. WER alone decides: quality stays the default unless the best fast cell on the default configuration (large-v3, float16, word timestamps) beats its WER by more than 1 percentage point. `recommend_mode` implements this; projected processing time is still reported, for information only. On the first run (draft reference), quality has 21.9 % WER vs 25.1 % for fast b4, so the decision is `quality`.
+- **Faster optional preset `fast`:** large-v3, fast mode, batch size 4. In the M1 run it was about 2.4× faster (45 vs 104–109 min for 10 h of speech) at +3.2 pp WER. It replaces `fast-draft` (large-v3-turbo), which was about 14 pp worse on Hungarian. A fixed batch size of 4 means no OOM probing; b4 needs about 5 GB VRAM.
+- SPEC §3.2 rationale updated accordingly. The re-measurement on the verified reference and on a ≥ 5 min clip (open tasks above) still applies: it confirms the WER comparison; the speed figures there are informational only.
+
+## 2026-10-29 – M2 task: survive crashing worker processes (owner request)
+
+Prompted by the intermittent 0xC0000005 crash of a child process near the VRAM limit (parallel measurement above). Requirement for M2, also in SPEC §5.7 and §13:
+
+- The pipeline runs ASR work in child processes. It detects an unexpected child exit: a non-zero exit code, a Windows NTSTATUS code such as 0xC0000005, a signal on Linux, or a missing result. Such an exit is a failure of that chunk, not of the session.
+- **The interrupted chunk is re-run once from the cache state.** Completed chunks are kept: they were written atomically and their cache keys are valid. Partial or temporary files of the failed chunk are discarded, never used.
+- If the same chunk fails again, processing stops with a clear error that names the track, the chunk range (track-local time), the exit code (decoded where known, e.g. "access violation"), the likely cause (e.g. GPU memory near its limit) and a hint (smaller model or compute type, fewer parallel workers, quality mode). The cache stays consistent, so a later run resumes after the completed chunks.
+- Every crash and retry is recorded in the run log and in the output JSON (`processing_events`), with no transcript text.
+- Tests: a fake worker that crashes once (the chunk is retried and the run succeeds) and one that crashes twice (clear error, cache consistent, the resumed run does not redo completed chunks).
