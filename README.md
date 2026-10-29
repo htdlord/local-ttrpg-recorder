@@ -41,6 +41,29 @@ uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
 `--no-write` to only count) and reports frame counts, overflows, timestamp continuity,
 clock deviation and per-channel peak/RMS levels.
 
+Transcribe one file and inspect settings:
+
+```bash
+uv run sessionscribe transcribe track.flac --language hu --out output/   # json + txt
+uv run sessionscribe transcribe track.flac --language hu --mode fast     # batched pipeline
+uv run sessionscribe config show --preset fast-draft --set decoding.beam_size=3
+uv run sessionscribe config init my-settings.toml
+uv run sessionscribe config validate my-settings.toml
+uv run sessionscribe presets list
+```
+
+`quality` mode (the default) uses `WhisperModel.transcribe()` with temperature fallback.
+`fast` mode uses the batched pipeline, which ignores some options; the CLI warns when a
+setting you chose has no effect in the selected mode.
+
+Benchmarks run against local reference clips, which are personal data and git-ignored.
+[docs/REFERENCE_GUIDE.md](docs/REFERENCE_GUIDE.md) describes how to prepare a reference.
+
+```bash
+uv run sessionscribe bench run --refs bench/refs --matrix m1   # writes work/bench/<run>/results.md
+uv run sessionscribe bench score work/bench/<run>              # re-score without ASR
+```
+
 CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
 (`uv sync --extra cuda`) or a system CUDA/cuDNN; `doctor` shows where each library was found.
 

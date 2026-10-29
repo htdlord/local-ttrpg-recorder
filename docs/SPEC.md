@@ -320,6 +320,6 @@ Live transcription; campaign glossary + post-correction list; hybrid fast/qualit
 ## 15. Open questions
 
 - Default ownership margin and attenuation – measured in M3.
-- Default ASR mode – confirmed in M1 benchmark.
+- Default ASR mode – provisional M1 decision on a 109 s clip; repeat with a ≥ 5 min clip (§11.1) before the M3 tolerances are fixed.
 - Recording segment length (5 min default) – confirm in M5.
 - Project name.

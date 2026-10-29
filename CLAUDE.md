@@ -37,7 +37,7 @@ uv run pytest -m "not gpu and not slow and not audio_hw"   # fast suite = CI
 uv run pytest -m gpu                                       # local, needs CUDA
 uv run sessionscribe doctor                                # environment check
 uv run sessionscribe record-probe --channels 1-8 --minutes 30
-uv run sessionscribe bench --refs bench/refs               # local reference set
+uv run sessionscribe bench run --refs bench/refs           # local reference set
 uv run sessionscribe --help
 uv run sessionscribe-gui
 ```
@@ -56,7 +56,7 @@ src/sessionscribe/
     exporters/         # txt, srt, vtt, json, md
     events.py          # AudioBlock, SegmentEvent(provisional|final), progress/warning/error
     cache.py           # layered cache, atomic writes
-    bench.py           # metrics against reference transcripts
+    bench/             # reference tooling, metrics, matrix runner
   cli.py
   gui/                 # PySide6; uses core public API + events only
 ```
