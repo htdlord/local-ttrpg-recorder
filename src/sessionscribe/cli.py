@@ -604,6 +604,9 @@ def _save_last_settings(session: Session, settings: Settings) -> None:
     atomic_write_json(work / LAST_SETTINGS, settings.model_dump(mode="json"))
 
 
+ASR_SECTIONS = ("model", "asr", "decoding", "vocabulary", "vad")
+
+
 def _export_settings(
     session: Session,
     preset: str | None,
@@ -611,7 +614,11 @@ def _export_settings(
     set_: list[str] | None,
     cli: dict[str, Any],
 ) -> Settings:
-    """The last transcription's settings plus --set/--formats, unless a preset/config is given."""
+    """Fresh settings, with the ASR sections of the last transcription (export never runs ASR).
+
+    Without this, a language or model given only on the transcribe command line would make
+    every cache key miss. --preset or --config resolve everything afresh instead.
+    """
     from pydantic import ValidationError
 
     from sessionscribe.core.config import Settings, deep_merge, parse_override
@@ -620,7 +627,9 @@ def _export_settings(
     last = session.work_dir(settings.output.work_dir) / LAST_SETTINGS
     if preset is not None or config is not None or not last.is_file():
         return settings
-    data = json.loads(last.read_text(encoding="utf-8"))
+    previous = json.loads(last.read_text(encoding="utf-8"))
+    data = settings.model_dump(mode="json")
+    data.update({k: previous[k] for k in ASR_SECTIONS if k in previous})
     try:
         for item in set_ or ():
             data = deep_merge(data, parse_override(item))
@@ -652,8 +661,8 @@ def export(
 ) -> None:
     """Re-export from the cache without ASR (after renaming, offset or output changes).
 
-    Uses the settings of the last ``transcribe --session`` run plus --set/--formats;
-    --preset or --config resolve settings afresh instead.
+    ASR settings come from the last ``transcribe`` run; output, quality and other
+    settings are resolved afresh. --preset or --config resolve everything afresh.
     """
     from sessionscribe.core.exporters.formats import write_session_outputs
     from sessionscribe.core.pipeline.asr import AsrError

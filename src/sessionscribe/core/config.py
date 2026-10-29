@@ -167,11 +167,18 @@ class QualitySettings(_Section):
 
     enabled: bool = True
     low_logprob: float = Field(-1.0, description="Flag avg_logprob below this.")
+    # no_speech_prob and avg_logprob belong to the whole 30 s decoding window, so a high
+    # no_speech_prob alone says little; like Whisper's silence rule, it needs a low logprob.
     high_no_speech: float = Field(0.6, ge=0, le=1, description="Flag no_speech_prob above this.")
+    high_no_speech_logprob: float = Field(
+        -0.5, description="... when avg_logprob is also below this."
+    )
     high_compression: float = Field(2.4, gt=0, description="Flag compression ratio above this.")
     repeated_ngram: int = Field(3, ge=1, description="n of the repeated n-gram check.")
     repeated_ngram_times: int = Field(3, ge=2, description="Occurrences that count as a loop.")
-    max_chars_per_s: float = Field(25.0, gt=0, description="Text too long for voiced time.")
+    max_chars_per_s: float = Field(
+        35.0, gt=0, description="Text too long for its voiced time (at least 1 s counted)."
+    )
     min_vad_fraction: float = Field(
         0.5, ge=0, le=1, description="Flag segments with less of their time in VAD speech."
     )

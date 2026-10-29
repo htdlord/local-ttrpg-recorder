@@ -38,6 +38,8 @@ class Cell:
     # load their own copy.
     parallel: int = 1
     parallel_kind: Literal["threads", "processes"] = "threads"
+    # Chunked like the session pipeline (owned range in s); None = one piece per track.
+    owned_s: float | None = None
 
     @property
     def name(self) -> str:
@@ -49,6 +51,8 @@ class Cell:
             parts.append(
                 f"p{self.parallel}{'threads' if self.parallel_kind == 'threads' else 'procs'}"
             )
+        if self.owned_s:
+            parts.append(f"own{self.owned_s:g}")
         return "_".join(parts)
 
 
@@ -74,6 +78,11 @@ def _matrix_m1() -> list[Cell]:
 MATRICES: dict[str, Callable[[], list[Cell]]] = {
     "m1": _matrix_m1,
     "parallel": lambda: [Cell("large-v3", "float16", "quality"), *_parallel_cells()],
+    # M2: chunk boundaries must not cost recall (owned 30/60 s vs whole tracks).
+    "chunking": lambda: [
+        Cell("large-v3", "float16", "quality"),
+        *(Cell("large-v3", "float16", "quality", owned_s=s) for s in (30.0, 60.0)),
+    ],
     # Smoke test of the harness: tiny model, both modes.
     "quick": lambda: [
         Cell("tiny", "int8", "quality", None, True),
@@ -139,6 +148,8 @@ def _cell_cmd(
         cmd += ["--track", t]
     if cell.batch_size:
         cmd += ["--batch-size", str(cell.batch_size)]
+    if cell.owned_s:
+        cmd += ["--owned-s", str(cell.owned_s)]
     return cmd
 
 
@@ -289,6 +300,7 @@ def recommend_mode(cells: list[dict[str, Any]], clip_seconds: float) -> dict[str
             c["run"].get("ok")
             and c.get("metrics")
             and (s["model"], s["compute_type"], s["word_timestamps"]) == (model, ct, wts)
+            and not s.get("owned_s")
         )
 
     qualities = [c for c in cells if default(c) and c["cell"]["mode"] == "quality"]

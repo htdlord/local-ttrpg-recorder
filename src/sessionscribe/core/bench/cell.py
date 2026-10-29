@@ -4,6 +4,9 @@ A separate process per cell gives clean peak RAM/VRAM figures and survives GPU O
 a crashing CUDA library. Transcripts go to ``--out``; stdout carries one JSON line
 with timings only (no text).
 
+``--owned-s S`` transcribes each track in chunks of S s (owned range), as the session
+pipeline does, to check that chunk boundaries cost no recall.
+
 ``--workers N`` transcribes N tracks at once from threads sharing one model loaded with
 ``num_workers=N``. ``--track clip/speaker`` restricts the child to some tracks; the
 runner uses it to split one cell over several processes.
@@ -86,8 +89,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         def one(job: tuple[Clip, ClipTrack]) -> TranscriptionResult:
             clip, track = job
             engine = engines[clip.config.id]
-            audio, _ = load_for_asr(clip.track_path(track), max_duration_s=None)
-            result = engine.transcribe(audio, source_id=track.speaker)
+            if args.owned_s:
+                result = chunked(engine, clip.track_path(track), track.speaker, args.owned_s)
+            else:
+                audio, _ = load_for_asr(clip.track_path(track), max_duration_s=None)
+                result = engine.transcribe(audio, source_id=track.speaker)
             who = Speaker(track.speaker, track.speaker, Path(track.file).name)
             out_dir = Path(args.out) / clip.config.id
             write_outputs(result, engine.settings, who, out_dir, track.speaker, ("json",))
@@ -127,6 +133,54 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     return info
 
 
+def chunked(engine: Any, path: Path, speaker: str, owned_s: float) -> Any:
+    """Transcribe one track chunk by chunk, as the session pipeline does (no cache)."""
+    from dataclasses import replace
+
+    from sessionscribe.core.audio.track import VirtualTrack
+    from sessionscribe.core.pipeline.asr import SpeechInterval
+    from sessionscribe.core.pipeline.chunks import plan_chunks, resolve_chunks
+    from sessionscribe.core.pipeline.features import envelope, frame_samples
+    from sessionscribe.core.pipeline.worker import _shift, chunk_audio
+    from sessionscribe.core.timeline import TIMELINE_RATE, rescale
+
+    s = engine.settings
+    track = VirtualTrack.open(path)
+    frame_ms = s.bleed.frame_ms
+    env = envelope(track.blocks(), frame_samples(frame_ms, track.samplerate))
+    length = rescale(track.frames, track.samplerate, TIMELINE_RATE)
+    chunks = plan_chunks(
+        length,
+        env,
+        frame=frame_samples(frame_ms),
+        owned_s=owned_s,
+        context_s=s.asr.chunk_context_s,
+        search_s=s.asr.chunk_boundary_search_s,
+    )
+    parts = [engine.transcribe(chunk_audio(track, c), source_id=speaker) for c in chunks]
+    shifted = [
+        [_shift(seg, c.ctx_start) for seg in r.segments] for c, r in zip(chunks, parts, strict=True)
+    ]
+    kept = [k for k in resolve_chunks(chunks, shifted) if not k.boundary_duplicate]
+    vad = [
+        SpeechInterval(
+            max(v.start + c.ctx_start, c.owned_start), min(v.end + c.ctx_start, c.owned_end)
+        )
+        for c, r in zip(chunks, parts, strict=True)
+        for v in r.vad_intervals
+        if min(v.end + c.ctx_start, c.owned_end) > max(v.start + c.ctx_start, c.owned_start)
+    ]
+    segments = [replace(k.segment, index=i) for i, k in enumerate(kept)]
+    return replace(
+        parts[0],
+        duration=length,
+        transcribe_s=sum(r.transcribe_s for r in parts),
+        vad_s=sum(r.vad_s for r in parts),
+        segments=segments,
+        vad_intervals=vad,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sessionscribe.core.bench.cell")
     parser.add_argument("--clip", action="append", required=True)
@@ -139,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--preset", default="conversation")
     parser.add_argument("--workers", type=int, default=1, help="Parallel tracks (threads).")
     parser.add_argument("--track", action="append", help="clip_id/speaker to process.")
+    parser.add_argument("--owned-s", type=float, help="Chunk like the session pipeline.")
     args = parser.parse_args(argv)
     args.word_timestamps = bool(args.word_timestamps)
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)

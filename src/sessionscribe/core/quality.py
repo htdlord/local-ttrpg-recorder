@@ -20,6 +20,8 @@ OVERLAPS_GAP = "overlaps_gap"
 POSSIBLE_DUPLICATE = "possible_duplicate"
 LOW_OWNERSHIP = "low_ownership"
 
+MIN_TEXT_BASIS_S = 1.0  # short words have tight timestamps; do not flag them as too long
+
 
 def overlap(a: int, b: int, intervals: Sequence[tuple[int, int]]) -> int:
     return sum(max(0, min(b, e) - max(a, s)) for s, e in intervals)
@@ -46,7 +48,10 @@ def quality_flags(
     flags: list[str] = []
     if seg.avg_logprob < settings.low_logprob:
         flags.append(LOW_LOGPROB)
-    if seg.no_speech_prob > settings.high_no_speech:
+    if (
+        seg.no_speech_prob > settings.high_no_speech
+        and seg.avg_logprob < settings.high_no_speech_logprob
+    ):
         flags.append(HIGH_NO_SPEECH)
     if seg.compression_ratio > settings.high_compression:
         flags.append(HIGH_COMPRESSION)
@@ -59,8 +64,8 @@ def quality_flags(
         if length and voiced < settings.min_vad_fraction * length:
             flags.append(OUTSIDE_VAD)
     chars = len(seg.text.replace(" ", ""))
-    basis = voiced or length
-    if chars and (not basis or chars > settings.max_chars_per_s * basis / TIMELINE_RATE):
+    basis = max(voiced, MIN_TEXT_BASIS_S * TIMELINE_RATE)
+    if chars > settings.max_chars_per_s * basis / TIMELINE_RATE:
         flags.append(TOO_LONG)
     if any(overlap(seg.start, max(seg.end, seg.start + 1), [g]) for g in gaps):
         flags.append(OVERLAPS_GAP)
