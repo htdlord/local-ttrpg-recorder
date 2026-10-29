@@ -173,3 +173,26 @@ Observations:
 - **Criterion result: `revisit`.** Quality has the better WER (21.9 % vs 25.1 %, well beyond the 1 pp tolerance), but its projected 109 min for 10 h of speech exceeds the 60 min budget. Per-track overhead weighs more on a 109 s clip, so the projection is likely pessimistic.
 
 **Provisional decision:** the default stays `quality`, unchanged until the verified reference and a ≥ 5 min clip are measured. On these numbers, quality is the only configuration within reach of the best accuracy. Fast b4 (+3.2 pp WER, 45 min) is the candidate for a "faster" preset or for the later hybrid mode (SPEC §14). The SPEC §3.2 rationale (finishing a session in "well under an hour") is not confirmed and is reopened for that re-measurement.
+
+## 2026-10-29 – M1 benchmark: parallel tracks in quality mode (owner request)
+
+Matrix `parallel` (also part of `m1`): large-v3 float16 quality with word timestamps, the same clip01 and the same draft reference. Tracks run either from threads sharing one model with `num_workers = N`, or as N separate processes each loading the model, with tracks split between them longest-first by an activity estimate. "proc s" is the wall time of the processing phase after model load and warm-up; "wall s" is the whole cell. VRAM is the device total minus the baseline (about 1.8 GB baseline on a 16 GB card).
+
+| configuration | proc s | wall s | 10 h speech (min) | VRAM MiB | RAM MiB |
+|---|---|---|---|---|---|
+| sequential | 35.1 | 39.6 | 104 | 4299 | 3299 |
+| 2 threads | 32.3 | 37.1 | 96 | 4720 | 3298 |
+| 3 threads | 32.3 | 37.2 | 96 | 5018 | 3299 |
+| 2 processes | 33.4 | 41.1 | 99 | 8564 | 5860 |
+| 3 processes | 33.3 | 41.2 | 99 | 12881 | 8469 |
+
+- **Little to gain from parallelism, about 8 %.** WER and the transcripts are identical in every variant. The per-track times add up to about 64 s across workers, so concurrent tracks just share a GPU that one quality-mode track already keeps busy: throughput is GPU-bound, not limited by sequential scheduling.
+- **Threads cost little memory** (+0.4 GB for 2, +0.7 GB for 3). **Processes cost one full model each** (+4.3 GB VRAM and +2.5 GB RAM per process), take longer to load, and are no faster.
+- **3 processes crashed once:** a child exited with 0xC0000005 (access violation) and no stderr output. The repeat run succeeded. The total was about 14.5 GB of 16 GB, so this is treated as a near-limit GPU memory failure that ctranslate2 does not report cleanly as OOM.
+- **Conclusion:** parallel tracks do not bring quality mode under the 60 min budget (best: 96 min for 10 h of speech). If anything is used, it is 2 threads (`num_workers = 2`), cheap and slightly faster. Multi-process parallelism is rejected for this GPU class. Re-measure with the ≥ 5 min clip, where several speakers being active at the same time may change the picture.
+- `recommend_mode` now takes the quality projection from the fastest quality variant of the default configuration, parallel ones included; WER still comes from the sequential cell.
+
+## Open tasks (M1)
+
+- [ ] Re-score `work/bench/20261029-212243` and `work/bench/20261029-214701` with the hand-corrected, verified clip01 reference (`bench score`); record the numbers, then merge PR #2.
+- [ ] Repeat the M1 benchmark (incl. `parallel`) with a ≥ 5 min clip (SPEC §11.1) and settle the default ASR mode; required before the M3 tolerances are fixed.
