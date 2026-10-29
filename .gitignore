@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+pip-wheel-metadata/
+
+# uv / virtualenvs (uv.lock IS committed)
+.venv/
+venv/
+env/
+.python-version.local
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Personal data: real recordings and reference transcripts (never commit)
+bench/refs/
+
+# Audio files (no large binaries; tests use synthetic audio)
+*.wav
+*.WAV
+*.flac
+*.FLAC
+*.rf64
+
+# Work, cache and output directories
+work/
+cache/
+.cache/
+*_cache/
+output/
+models/
+recordings/
