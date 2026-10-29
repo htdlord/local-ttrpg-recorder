@@ -79,3 +79,25 @@ def test_bench_reference_workflow(tmp_path):
     ok("ref", "check", str(clip))
     result = runner.invoke(app, ["bench", "run", "--refs", str(tmp_path), "--matrix", "nope"])
     assert result.exit_code == 1
+
+
+def test_session_init(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    from sessionscribe.core.session import Session
+
+    tracks = tmp_path / "rec"
+    tracks.mkdir()
+    for name in ("ch01_gm", "ch02_anna"):
+        sf.write(str(tracks / f"{name}.wav"), np.zeros(480, np.float32), 48_000)
+    out = tmp_path / "s" / "session.toml"
+    result = runner.invoke(app, ["session", "init", str(tracks), "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    session = Session.load(out)
+    assert [p.id for p in session.participants] == ["gm", "anna"]
+    assert (
+        session.source_path(session.participants[1]).resolve()
+        == (tracks / "ch02_anna.wav").resolve()
+    )
+    assert runner.invoke(app, ["session", "init", str(tracks), "--out", str(out)]).exit_code == 1

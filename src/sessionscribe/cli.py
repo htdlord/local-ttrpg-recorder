@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -268,6 +269,10 @@ config_app = typer.Typer(help="Show, create and validate settings files.", no_ar
 presets_app = typer.Typer(help="Built-in and user presets.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 app.add_typer(presets_app, name="presets")
+session_app = typer.Typer(
+    help="Session files: participants, sources, offsets.", no_args_is_help=True
+)
+app.add_typer(session_app, name="session")
 
 PresetOpt = Annotated[
     str | None, typer.Option("--preset", "-p", help="Preset name (default: conversation).")
@@ -379,6 +384,37 @@ def presets_list() -> None:
     for name, source in list_presets().items():
         typer.echo(f"{name:16} {source or 'built-in'}")
     typer.echo(f"\nUser presets: {user_presets_dir()}")
+
+
+@session_app.command("init")
+def session_init(
+    folder: Annotated[
+        Path, typer.Argument(help="Folder with one file or segment folder per participant.")
+    ],
+    out: Annotated[
+        Path | None, typer.Option(help="Session file (default: FOLDER/session.toml).")
+    ] = None,
+    force: Annotated[bool, typer.Option(help="Overwrite an existing file.")] = False,
+) -> None:
+    """Suggest participants from file names (chNN_name.wav) and write session.toml."""
+    from sessionscribe.core.session import SESSION_FILE, suggest_session, write_session
+
+    path = out or folder / SESSION_FILE
+    if path.exists() and not force:
+        typer.echo(f"{_badge('FAIL')} {path} exists; use --force to overwrite", err=True)
+        raise typer.Exit(1)
+    try:
+        config = suggest_session(folder)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    for participant in config.participants:  # sources are relative to the session file
+        target = os.path.relpath(folder / participant.source, path.parent)
+        participant.source = Path(target).as_posix()
+    write_session(path, config)
+    typer.echo(
+        f"Wrote {path}: {len(config.participants)} participants; edit names and offsets there."
+    )
 
 
 @app.command()
