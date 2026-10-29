@@ -1,0 +1,70 @@
+[project]
+name = "sessionscribe"
+version = "0.0.1"
+description = "Local multi-track speech-to-text for tabletop RPG sessions, built on faster-whisper"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "htdlord" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    # ASR stack is pinned exactly: parameter behaviour differs between versions.
+    "faster-whisper==1.2.1",
+    "ctranslate2==4.8.4",
+    "numpy>=1.26",
+    "sounddevice>=0.5.1",
+    "soundfile>=0.13",
+    "typer>=0.15",
+]
+
+[project.optional-dependencies]
+# CUDA 12 runtime libraries for ctranslate2 (cuBLAS + cuDNN 9), see core/cuda_libs.py.
+cuda = [
+    "nvidia-cublas-cu12>=12.4,<13",
+    "nvidia-cudnn-cu12>=9,<10",
+]
+
+[project.scripts]
+sessionscribe = "sessionscribe.cli:app"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers"]
+markers = [
+    "gpu: needs a CUDA GPU (local only)",
+    "slow: loads a real model or runs long (local only)",
+    "audio_hw: needs an audio interface (local only)",
+]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["sessionscribe"]
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true

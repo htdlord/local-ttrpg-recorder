@@ -53,3 +53,8 @@ cache/
 output/
 models/
 recordings/
+
+# Model download caches (faster-whisper / Hugging Face)
+hf_cache/
+.hf_cache/
+huggingface/
