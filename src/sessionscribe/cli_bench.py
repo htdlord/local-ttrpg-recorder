@@ -279,3 +279,96 @@ def ref_check(
         f"[ OK ] {clip.reference_path} ({reference.status}): {len(reference.utterances)} "
         f"utterances, {len(reference.excluded)} excluded"
     )
+
+
+RefsOpt = Annotated[
+    Path, typer.Option("--refs", help="Folder with reference clips.", file_okay=False)
+]
+
+
+def _clips(refs: Path, clip: list[str] | None, allow_draft: bool):  # -> list[ClipRef]
+    from sessionscribe.core.bench.runner import discover_clips
+
+    if not refs.is_dir():
+        raise _fail(f"{refs} not found")
+    clips, skipped = discover_clips(refs, clip, allow_draft=allow_draft)
+    for msg in skipped:
+        typer.echo(typer.style("[WARN]", fg=typer.colors.YELLOW, bold=True) + f" skipped {msg}")
+    if not clips:
+        raise _fail("no clip with a reference found")
+    for c in clips:
+        if c.path.name != "reference.json" or not c.verified:
+            typer.echo(
+                typer.style("[WARN]", fg=typer.colors.YELLOW, bold=True)
+                + f" {c.clip.config.id}: reference is {c.reference.status} ({c.path.name}); "
+                "numbers are provisional"
+            )
+    return clips
+
+
+@bench_app.command("run")
+def bench_run(
+    refs: RefsOpt = Path("bench/refs"),
+    matrix: Annotated[str, typer.Option(help="Cell matrix: m1 or quick.")] = "m1",
+    clip: Annotated[list[str] | None, typer.Option(help="Only these clips.")] = None,
+    cells: Annotated[
+        str | None, typer.Option(help="Only cells whose name contains this text.")
+    ] = None,
+    out: Annotated[Path, typer.Option(help="Run folder parent.")] = Path("work/bench"),
+    allow_draft: Annotated[
+        bool, typer.Option(help="Use draft/import.json where reference.json is missing.")
+    ] = False,
+    timeout_min: Annotated[float, typer.Option(help="Timeout per cell in minutes.")] = 60.0,
+) -> None:
+    """Run the benchmark matrix; each cell in its own process. Prints numbers only."""
+    from datetime import datetime
+
+    from sessionscribe.core.bench.runner import MATRICES, run_matrix
+
+    if matrix not in MATRICES:
+        raise _fail(f"unknown matrix {matrix!r}; available: {', '.join(MATRICES)}")
+    clips = _clips(refs, clip, allow_draft)
+    selected = [c for c in MATRICES[matrix]() if cells is None or cells in c.name]
+    if not selected:
+        raise _fail("no cells selected")
+    run_dir = out / datetime.now().strftime("%Y%m%d-%H%M%S")
+    typer.echo(f"{len(selected)} cells x {len(clips)} clip(s) -> {run_dir}")
+
+    def show(i: int, cell, entry) -> None:
+        run = entry["run"]
+        if not run.get("ok"):
+            typer.echo(f"  [{i + 1:2d}/{len(selected)}] {cell.name}: FAILED {run.get('error')}")
+            return
+        s, d = entry["metrics"]["summary"], entry["derived"]
+        typer.echo(
+            f"  [{i + 1:2d}/{len(selected)}] {cell.name}: WER {100 * (s['wer'] or 0):.1f} %, "
+            f"recall {100 * (s['speech_recall'] or 0):.0f} %, silent-track words "
+            f"{s['silent_track_words']}, RTF {d.get('rtf', 0):.3f}, "
+            f"VRAM {run.get('peak_vram_mb')} MiB"
+        )
+
+    results = run_matrix(selected, clips, run_dir, timeout_s=timeout_min * 60, on_cell=show)
+    rec = results.get("recommendation") or {}
+    if rec.get("decision"):
+        typer.echo(
+            f"Default mode (provisional): {rec['decision']} - quality WER "
+            f"{100 * rec['quality_wer']:.1f} % vs fast {100 * rec['best_fast_wer']:.1f} %, "
+            f"projection {rec['quality_projected_min']} min"
+        )
+    typer.echo(f"{run_dir / 'results.md'}")
+
+
+@bench_app.command("score")
+def bench_score(
+    run_dir: Annotated[Path, typer.Argument(help="A run folder under work/bench.")],
+    refs: RefsOpt = Path("bench/refs"),
+    clip: Annotated[list[str] | None, typer.Option(help="Only these clips.")] = None,
+    allow_draft: Annotated[bool, typer.Option(help="Accept draft references.")] = False,
+) -> None:
+    """Re-score a finished run against the current references (no ASR)."""
+    from sessionscribe.core.bench.runner import score_run
+
+    if not (run_dir / "results.json").is_file():
+        raise _fail(f"{run_dir / 'results.json'} not found")
+    score_run(run_dir, _clips(refs, clip, allow_draft))
+    typer.echo(f"{run_dir / 'results.md'}")
