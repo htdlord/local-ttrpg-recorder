@@ -6,7 +6,8 @@ levels and (optionally) writes one FLAC PCM_24 file per channel.
 
 PASS criterion (DECISIONS 2026-10-29, M0): no overflow / error status flag, nothing dropped
 by the ring buffer, equal frame counts on all channels, written == received, continuous
-callback ADC timestamps. Wall-clock deviation is informational (WARN above 200 ppm).
+callback ADC timestamps (see TimestampMonitor). Wall-clock deviation is informational
+(WARN above 200 ppm).
 """
 
 from __future__ import annotations
@@ -15,8 +16,11 @@ import json
 import logging
 import math
 import shutil
+import statistics
 import threading
 import time
+from array import array
+from collections import deque
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -30,6 +34,7 @@ import soundfile as sf
 from sessionscribe.core.audio.backend import (
     SAMPLE_DTYPE,
     AudioSetupError,
+    InputDevice,
     StreamPlan,
     check_stream_settings,
     default_input_index,
@@ -50,6 +55,7 @@ CLOCK_WARN_PPM = 200.0
 CLOCK_MIN_SECONDS = 60.0  # shorter runs: callback jitter dominates the ppm figure
 STALL_TIMEOUT_S = 2.0
 TIMESTAMP_TOLERANCE_BLOCKS = 0.5
+TIMESTAMP_QUEUE_BLOCKS = 1 << 16  # (adc, frames) pairs between callback and writer
 
 
 class Verdict(StrEnum):
@@ -92,6 +98,8 @@ class ChannelLevel:
 class ProbeReport:
     device: str
     host_api: str
+    device_index: int
+    device_auto_selected: bool  # True when no --audio-device was given
     channels: list[int]
     samplerate: int
     actual_samplerate: float | None
@@ -116,8 +124,11 @@ class ProbeReport:
     writer_max_write_s: float
     timestamps_available: bool
     timestamp_discontinuities: int
-    timestamp_max_deviation_ms: float
+    timestamp_jitter_median_ms: float | None
+    timestamp_jitter_p99_ms: float | None
+    timestamp_jitter_max_ms: float | None
     missing_timestamps: int
+    timestamp_queue_dropped: int
     clock_deviation_ppm: float | None
     levels: list[ChannelLevel]
     output_dir: str | None = None
@@ -156,38 +167,51 @@ def required_disk_bytes(channels: int, samplerate: int, duration_s: float) -> in
     return int(raw * DISK_RESERVE)
 
 
+@dataclass(frozen=True)
+class JitterStats:
+    """Absolute timestamp jitter around the median-smoothed residual, in seconds."""
+
+    median_s: float
+    p99_s: float
+    max_s: float
+
+
 class TimestampMonitor:
     """Detects discontinuities in callback ADC timestamps relative to the sample count.
 
-    The residual ``(adc - adc0) - frames / rate`` stays near a slowly moving baseline
-    while blocks are contiguous (the baseline absorbs clock drift). Jitter makes it
-    wobble briefly; a lost or inserted block shifts it permanently. A discontinuity is a
-    deviation above the tolerance that persists for ``persist_s`` and at least two blocks.
+    The residual ``(adc - adc0) - frames / rate`` is smoothed with a running median over
+    ``smooth_s``. While blocks are contiguous the smoothed residual stays near a slowly
+    tracking baseline (which absorbs clock drift); jitter and single late timestamps
+    are removed by the median. A lost or inserted block shifts it permanently by one
+    block. A discontinuity is a smoothed shift of more than ``tolerance_blocks`` (half a
+    block) that persists for at least ``persist_s`` — so one lost block is detected.
+
+    Runs in the writer thread, not in the audio callback.
     """
 
     def __init__(
         self,
         samplerate: float,
         tolerance_blocks: float = TIMESTAMP_TOLERANCE_BLOCKS,
-        min_tolerance_s: float = 0.002,
+        smooth_s: float = 0.2,
         persist_s: float = 0.1,
         alpha: float = 0.01,
     ):
         self.samplerate = samplerate
         self.tolerance_blocks = tolerance_blocks
-        self.min_tolerance_s = min_tolerance_s
+        self.smooth_s = smooth_s
         self.persist_s = persist_s
         self.alpha = alpha
         self.seen = 0
         self.missing = 0
         self.discontinuities = 0
-        self.max_deviation_s = 0.0
         self._frames = 0
         self._anchor_adc: float | None = None
         self._anchor_frames = 0
+        self._window: deque[float] | None = None
         self._baseline = 0.0
         self._excess_s = 0.0
-        self._excess_blocks = 0
+        self._jitter = array("d")
 
     def update(self, adc: float, frames: int) -> None:
         if adc <= 0.0:
@@ -195,27 +219,34 @@ class TimestampMonitor:
             self._frames += frames
             return
         self.seen += 1
-        if self._anchor_adc is None:
+        block_s = frames / self.samplerate
+        if self._anchor_adc is None or self._window is None:
             self._anchor_adc = adc
             self._anchor_frames = self._frames
+            length = max(5, math.ceil(self.smooth_s / block_s)) if block_s > 0 else 5
+            self._window = deque(maxlen=length)
         residual = (adc - self._anchor_adc) - (self._frames - self._anchor_frames) / self.samplerate
-        deviation = residual - self._baseline
-        if abs(deviation) > self.max_deviation_s:
-            self.max_deviation_s = abs(deviation)
-        block_s = frames / self.samplerate
-        if abs(deviation) > max(self.min_tolerance_s, self.tolerance_blocks * block_s):
+        self._window.append(residual)
+        smoothed = statistics.median(self._window)
+        self._jitter.append(abs(residual - smoothed))
+        shift = smoothed - self._baseline
+        if abs(shift) > self.tolerance_blocks * block_s:
             self._excess_s += block_s
-            self._excess_blocks += 1
-            if self._excess_s >= self.persist_s and self._excess_blocks >= 2:
+            if self._excess_s >= self.persist_s:
                 self.discontinuities += 1
-                self._baseline = residual
+                self._baseline = smoothed
                 self._excess_s = 0.0
-                self._excess_blocks = 0
         else:
             self._excess_s = 0.0
-            self._excess_blocks = 0
-            self._baseline += self.alpha * deviation
+            self._baseline += self.alpha * shift
         self._frames += frames
+
+    def jitter_stats(self) -> JitterStats | None:
+        if not self._jitter:
+            return None
+        values = np.frombuffer(self._jitter, dtype=np.float64)
+        median, p99 = np.percentile(values, [50, 99])
+        return JitterStats(float(median), float(p99), float(np.max(values)))
 
 
 class ProbeEngine:
@@ -242,7 +273,8 @@ class ProbeEngine:
         self.first_block_frames = 0
         self.first_wall: float | None = None
         self.last_wall: float | None = None
-        self.timestamps = TimestampMonitor(samplerate)
+        self.timestamp_queue = RingBuffer(TIMESTAMP_QUEUE_BLOCKS, 2, np.float64)
+        self._timestamp_row = np.zeros((1, 2), dtype=np.float64)  # preallocated
         self.fatal_error: str | None = None
         # Consumer-side state.
         self.frames_consumed = 0
@@ -250,6 +282,7 @@ class ProbeEngine:
         self.peak = np.zeros(channels, dtype=np.int64)
         self.sumsq = np.zeros(channels, dtype=np.float64)
         self.writer_max_write_s = 0.0
+        self.timestamps = TimestampMonitor(samplerate)
 
     # --- producer (PortAudio thread) ---------------------------------------------------
 
@@ -263,7 +296,10 @@ class ProbeEngine:
                     self.input_underflows += 1
                 if not (status.input_overflow or status.input_underflow):
                     self.other_status_flags += 1
-            self.timestamps.update(float(time_info.inputBufferAdcTime), frames)
+            row = self._timestamp_row
+            row[0, 0] = time_info.inputBufferAdcTime
+            row[0, 1] = frames
+            self.timestamp_queue.write(row)
             self.ring.write(indata, self.columns)
             if self.blocks == 0:
                 self.first_wall = now
@@ -278,6 +314,8 @@ class ProbeEngine:
 
     def drain(self, max_frames: int = 1 << 16) -> int:
         """Move buffered frames to levels/files. Returns the number of frames handled."""
+        for adc, block_frames in self.timestamp_queue.read():
+            self.timestamps.update(float(adc), int(block_frames))
         data = self.ring.read(max_frames)
         frames = data.shape[0]
         if frames == 0:
@@ -360,9 +398,11 @@ def evaluate(report: ProbeReport) -> tuple[Verdict, list[str]]:
         fails.append(f"written frames {report.frames_written} != received {report.frames_received}")
     if report.timestamp_discontinuities:
         fails.append(
-            f"{report.timestamp_discontinuities} timestamp discontinuity(ies), "
-            f"max deviation {report.timestamp_max_deviation_ms:.2f} ms"
+            f"{report.timestamp_discontinuities} timestamp discontinuity(ies) "
+            "(lost or inserted audio)"
         )
+    if report.timestamp_queue_dropped:
+        fails.append(f"timestamp queue dropped {report.timestamp_queue_dropped} entries")
     if not report.timestamps_available:
         warns.append("host API provides no ADC timestamps; continuity not verified")
     elif report.missing_timestamps:
@@ -401,6 +441,7 @@ def run_probe(
     config: ProbeConfig,
     *,
     on_progress: Callable[[ProbeProgress], None] | None = None,
+    on_start: Callable[[InputDevice, bool], None] | None = None,
     progress_interval_s: float = 5.0,
     stop: threading.Event | None = None,
 ) -> ProbeReport:
@@ -422,6 +463,8 @@ def run_probe(
         sd, device, config.channels, wasapi_exclusive=config.wasapi_exclusive
     )
     check_stream_settings(sd, plan, config.samplerate)
+    if on_start is not None:
+        on_start(device, config.device is None)
 
     out_dir: Path | None = None
     writers: list[Any] | None = None
@@ -513,9 +556,12 @@ def run_probe(
                 w.close()
 
     frames_written = [sf.info(str(p)).frames for p in paths] if writers is not None else None
+    jitter = engine.timestamps.jitter_stats()
     report = ProbeReport(
         device=device.name,
         host_api=device.host_api,
+        device_index=device.index,
+        device_auto_selected=config.device is None,
         channels=list(config.channels),
         samplerate=config.samplerate,
         actual_samplerate=actual_rate,
@@ -540,8 +586,11 @@ def run_probe(
         writer_max_write_s=engine.writer_max_write_s,
         timestamps_available=engine.timestamps.seen > 0,
         timestamp_discontinuities=engine.timestamps.discontinuities,
-        timestamp_max_deviation_ms=engine.timestamps.max_deviation_s * 1000.0,
+        timestamp_jitter_median_ms=jitter.median_s * 1000.0 if jitter else None,
+        timestamp_jitter_p99_ms=jitter.p99_s * 1000.0 if jitter else None,
+        timestamp_jitter_max_ms=jitter.max_s * 1000.0 if jitter else None,
         missing_timestamps=engine.timestamps.missing,
+        timestamp_queue_dropped=engine.timestamp_queue.dropped_blocks,
         clock_deviation_ppm=engine.clock_deviation_ppm(),
         levels=engine.levels(config.channels),
         output_dir=str(out_dir) if out_dir is not None else None,

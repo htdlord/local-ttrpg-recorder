@@ -12,7 +12,12 @@ from typing import Annotated
 import typer
 
 from sessionscribe import __version__
-from sessionscribe.core.audio.backend import AudioSetupError, parse_channel_spec
+from sessionscribe.core.audio.backend import (
+    AudioSetupError,
+    InputDevice,
+    format_channel_spec,
+    parse_channel_spec,
+)
 
 app = typer.Typer(
     name="sessionscribe",
@@ -180,10 +185,21 @@ def record_probe(
             err=True,
         )
 
-    if not as_json:
-        typer.echo(f"Recording {len(selected)} channel(s) for {minutes:g} min; Ctrl+C stops early.")
+    def started(device: InputDevice, auto_selected: bool) -> None:
+        how = "auto-selected" if auto_selected else "selected"
+        typer.echo(typer.style(f"Device ({how}): {device.label}", bold=True))
+        typer.echo(typer.style(f"Host API:      {device.host_api}", bold=True))
+        typer.echo(
+            f"Recording channels {format_channel_spec(selected)} for {minutes:g} min; "
+            "Ctrl+C stops early."
+        )
+
     try:
-        report = run_probe(config, on_progress=None if as_json else progress)
+        report = run_probe(
+            config,
+            on_progress=None if as_json else progress,
+            on_start=None if as_json else started,
+        )
     except AudioSetupError as exc:
         typer.echo(f"{_badge('FAIL')} {exc}", err=True)
         raise typer.Exit(1) from exc
@@ -192,7 +208,9 @@ def record_probe(
         typer.echo(report.to_json())
     else:
         ppm = report.clock_deviation_ppm
-        typer.echo(f"\nDevice:     {report.device} ({report.host_api})")
+        how = "auto-selected" if report.device_auto_selected else "selected"
+        typer.echo(f"\nDevice:     [{report.device_index}] {report.device} ({how})")
+        typer.echo(f"Host API:   {report.host_api}")
         typer.echo(
             f"Stream:     {report.actual_samplerate or 0:g} Hz, {report.dtype}, "
             f"latency {report.latency_s or 0:.3f} s"
@@ -217,8 +235,10 @@ def record_probe(
         typer.echo(
             "Timestamps: "
             + (
-                f"{report.timestamp_discontinuities} discontinuities, "
-                f"max deviation {report.timestamp_max_deviation_ms:.2f} ms"
+                f"{report.timestamp_discontinuities} discontinuities; jitter "
+                f"median {report.timestamp_jitter_median_ms or 0:.2f} ms, "
+                f"p99 {report.timestamp_jitter_p99_ms or 0:.2f} ms, "
+                f"max {report.timestamp_jitter_max_ms or 0:.2f} ms"
                 if report.timestamps_available
                 else "not provided by host API"
             )
