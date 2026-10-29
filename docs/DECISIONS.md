@@ -212,3 +212,8 @@ Prompted by the intermittent 0xC0000005 crash of a child process near the VRAM l
 - If the same chunk fails again, processing stops with a clear error that names the track, the chunk range (track-local time), the exit code (decoded where known, e.g. "access violation"), the likely cause (e.g. GPU memory near its limit) and a hint (smaller model or compute type, fewer parallel workers, quality mode). The cache stays consistent, so a later run resumes after the completed chunks.
 - Every crash and retry is recorded in the run log and in the output JSON (`processing_events`), with no transcript text.
 - Tests: a fake worker that crashes once (the chunk is retried and the run succeeds) and one that crashes twice (clear error, cache consistent, the resumed run does not redo completed chunks).
+
+## 2026-10-29 – OOM fallback also for a fixed batch size (owner request)
+
+- `asr.batch_size` is the **starting** batch size (default 16). On GPU OOM, fast mode halves it down to 1 and then fails with a clear error. This also applies to the `fast` preset (4 → 2 → 1), so it works on smaller GPUs. Non-powers of two halve with rounding down (6 → 3 → 1).
+- New setting `asr.oom_fallback` (default `true`, fast mode only) switches the fallback off. Benchmark cells set it to `false`, so a fixed batch size that does not fit shows up as a failed cell instead of quietly measuring a smaller batch.
