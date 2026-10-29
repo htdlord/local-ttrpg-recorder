@@ -78,6 +78,12 @@ class AsrSettings(_Section):
         description="Fast mode: on GPU OOM retry with half the batch size (for smaller GPUs).",
         json_schema_extra=_modes("ignored", "honoured"),
     )
+    # Chunking (SPEC §5.1), in track-local time; changing these re-runs ASR.
+    chunk_owned_s: float = Field(600.0, gt=0, description="Owned range per chunk.")
+    chunk_context_s: float = Field(5.0, ge=0, description="Extra audio ASR sees on each side.")
+    chunk_boundary_search_s: float = Field(
+        15.0, ge=0, description="How far a boundary may move to the quietest point."
+    )
 
 
 DEFAULT_TEMPERATURES: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
