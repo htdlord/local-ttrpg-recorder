@@ -88,9 +88,9 @@ def process_gpu_mb(pid: int) -> float | None:
 
 
 class GpuSampler:
-    """Polls nvidia-smi while a child process runs; keeps the peak.
+    """Polls nvidia-smi while child processes run; keeps the peak.
 
-    Method ``per-process`` when the driver reports the child's usage, otherwise
+    Method ``per-process`` when the driver reports every child's usage (summed), otherwise
     ``device-delta`` (device total minus the baseline before the child started).
     """
 
@@ -100,24 +100,24 @@ class GpuSampler:
         self.peak_process: float | None = None
         self.peak_device: float | None = None
         self._stop = threading.Event()
-        self._pid: int | None = None
+        self._pids: list[int] = []
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     @property
     def available(self) -> bool:
         return self.baseline is not None
 
-    def start(self, pid: int) -> None:
-        self._pid = pid
+    def start(self, pids: list[int]) -> None:
+        self._pids = list(pids)
         if self.available:
             self._thread.start()
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            if self._pid is not None:
-                proc = process_gpu_mb(self._pid)
-                if proc is not None:
-                    self.peak_process = max(self.peak_process or 0.0, proc)
+            per_process = [process_gpu_mb(pid) for pid in self._pids]
+            if per_process and all(v is not None for v in per_process):
+                total = sum(v for v in per_process if v is not None)
+                self.peak_process = max(self.peak_process or 0.0, total)
             dev = gpu_used_mb()
             if dev is not None:
                 self.peak_device = max(self.peak_device or 0.0, dev)

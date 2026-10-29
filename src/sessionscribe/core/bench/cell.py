@@ -3,6 +3,10 @@
 A separate process per cell gives clean peak RAM/VRAM figures and survives GPU OOM or
 a crashing CUDA library. Transcripts go to ``--out``; stdout carries one JSON line
 with timings only (no text).
+
+``--workers N`` transcribes N tracks at once from threads sharing one model loaded with
+``num_workers=N``. ``--track clip/speaker`` restricts the child to some tracks; the
+runner uses it to split one cell over several processes.
 """
 
 from __future__ import annotations
@@ -12,32 +16,52 @@ import json
 import logging
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     from sessionscribe.core.audio.reader import load_for_asr
-    from sessionscribe.core.bench.clip import Clip
+    from sessionscribe.core.bench.clip import Clip, ClipTrack, active_seconds
     from sessionscribe.core.bench.resources import peak_rss_mb
-    from sessionscribe.core.config import load_settings
+    from sessionscribe.core.config import Settings, load_settings
     from sessionscribe.core.exporters.single import Speaker, write_outputs
     from sessionscribe.core.inference_check import synthetic_audio
-    from sessionscribe.core.pipeline.asr import AsrEngine, is_out_of_memory, load_model
+    from sessionscribe.core.pipeline.asr import (
+        AsrEngine,
+        TranscriptionResult,
+        is_out_of_memory,
+        load_model,
+    )
     from sessionscribe.core.timeline import TIMELINE_RATE
 
     info: dict[str, Any] = {"ok": False, "error": None, "oom": False}
     clips = [Clip.load(Path(p)) for p in args.clip]
+    wanted = set(args.track or ())
 
-    def settings_for(language: str):
+    def settings_for(language: str) -> Settings:
         return load_settings(
             preset=args.preset,
             cli={
-                "model": {"id": args.model, "compute_type": args.compute_type},
+                "model": {
+                    "id": args.model,
+                    "compute_type": args.compute_type,
+                    "num_workers": args.workers,
+                },
                 "asr": {"mode": args.mode, "batch_size": args.batch_size},
                 "decoding": {"language": language, "word_timestamps": args.word_timestamps},
             },
         )
+
+    jobs: list[tuple[Clip, ClipTrack]] = [
+        (clip, track)
+        for clip in clips
+        for track in clip.config.tracks
+        if not wanted or f"{clip.config.id}/{track.speaker}" in wanted
+    ]
+    if args.workers > 1:  # longest first, so the pool finishes evenly
+        jobs.sort(key=lambda j: -active_seconds(j[0].track_path(j[1])))
 
     try:
         base = settings_for(clips[0].config.language)
@@ -53,34 +77,43 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         list(warm)
         info["warmup_s"] = round(time.perf_counter() - t0, 3)
 
-        transcribe_s = audio_s = speech_s = 0.0
-        batch_sizes: set[int] = set()
-        for clip in clips:
-            settings = settings_for(clip.config.language)
-            engine = AsrEngine(settings, model, loaded)
-            for track in clip.config.tracks:
-                audio, _ = load_for_asr(clip.track_path(track), max_duration_s=None)
-                result = engine.transcribe(audio, source_id=track.speaker)
-                transcribe_s += result.transcribe_s + result.vad_s
-                audio_s += result.audio_s
-                speech_s += sum(v.end - v.start for v in result.vad_intervals) / TIMELINE_RATE
-                if result.batch_size:
-                    batch_sizes.add(result.batch_size)
-                who = Speaker(track.speaker, track.speaker, Path(track.file).name)
-                write_outputs(
-                    result,
-                    settings,
-                    who,
-                    Path(args.out) / clip.config.id,
-                    track.speaker,
-                    ("json",),
-                )
+        engines = {
+            clip.config.id: AsrEngine(settings_for(clip.config.language), model, loaded)
+            for clip in clips
+        }
+
+        def one(job: tuple[Clip, ClipTrack]) -> TranscriptionResult:
+            clip, track = job
+            engine = engines[clip.config.id]
+            audio, _ = load_for_asr(clip.track_path(track), max_duration_s=None)
+            result = engine.transcribe(audio, source_id=track.speaker)
+            who = Speaker(track.speaker, track.speaker, Path(track.file).name)
+            out_dir = Path(args.out) / clip.config.id
+            write_outputs(result, engine.settings, who, out_dir, track.speaker, ("json",))
+            return result
+
+        proc_start = time.time()
+        t0 = time.perf_counter()
+        if args.workers > 1:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                results = list(pool.map(one, jobs))
+        else:
+            results = [one(job) for job in jobs]
+        elapsed = time.perf_counter() - t0
         info |= {
             "ok": True,
-            "transcribe_s": round(transcribe_s, 3),
-            "audio_s": round(audio_s, 3),
-            "speech_s": round(speech_s, 3),
-            "batch_sizes": sorted(batch_sizes),
+            "tracks": len(jobs),
+            "workers": args.workers,
+            "proc_start": proc_start,
+            "proc_end": proc_start + elapsed,
+            "elapsed_s": round(elapsed, 3),
+            "transcribe_s": round(sum(r.transcribe_s + r.vad_s for r in results), 3),
+            "audio_s": round(sum(r.audio_s for r in results), 3),
+            "speech_s": round(
+                sum(sum(v.end - v.start for v in r.vad_intervals) for r in results) / TIMELINE_RATE,
+                3,
+            ),
+            "batch_sizes": sorted({r.batch_size for r in results if r.batch_size}),
         }
     except Exception as exc:
         info["error"] = f"{type(exc).__name__}: {exc}"
@@ -103,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--word-timestamps", type=int, choices=(0, 1), default=1)
     parser.add_argument("--preset", default="conversation")
+    parser.add_argument("--workers", type=int, default=1, help="Parallel tracks (threads).")
+    parser.add_argument("--track", action="append", help="clip_id/speaker to process.")
     args = parser.parse_args(argv)
     args.word_timestamps = bool(args.word_timestamps)
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
