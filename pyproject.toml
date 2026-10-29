@@ -16,11 +16,15 @@ classifiers = [
 dependencies = [
     # ASR stack is pinned exactly: parameter behaviour differs between versions.
     "faster-whisper==1.2.1",
+    # Resampling to 16 kHz (libswresample); already required by faster-whisper.
+    "av>=11",
     "ctranslate2==4.8.4",
     "numpy>=1.26",
     "sounddevice>=0.5.1",
     "soundfile>=0.13",
     "typer>=0.15",
+    "pydantic>=2.9",
+    "tomli-w>=1.1",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +39,7 @@ sessionscribe = "sessionscribe.cli:app"
 
 [dependency-groups]
 dev = [
+    "jiwer>=3.1",
     "mypy>=1.13",
     "pre-commit>=4.0",
     "pytest>=8.3",
@@ -72,3 +77,4 @@ mypy_path = "src"
 ignore_missing_imports = true
 warn_unused_ignores = true
 check_untyped_defs = true
+plugins = ["pydantic.mypy"]
