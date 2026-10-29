@@ -118,16 +118,81 @@ def test_segments_from_our_json():
 
 def test_matrix_m1_shape():
     cells = MATRICES["m1"]()
-    assert len(cells) == 32
-    assert len({c.name for c in cells}) == 32
-    quality = [c for c in cells if c.mode == "quality"]
+    assert len(cells) == 36
+    assert len({c.name for c in cells}) == 36
+    quality = [c for c in cells if c.mode == "quality" and c.parallel == 1]
     assert len(quality) == 8 and all(c.batch_size is None for c in quality)
     assert {c.batch_size for c in cells if c.mode == "fast"} == {4, 8, 16}
+    parallel = [c.name for c in cells if c.parallel > 1]
+    assert parallel == [
+        "large-v3_float16_quality_wts_p2threads",
+        "large-v3_float16_quality_wts_p3threads",
+        "large-v3_float16_quality_wts_p2procs",
+        "large-v3_float16_quality_wts_p3procs",
+    ]
     assert Cell("large-v3", "float16", "fast", 8, False).name == "large-v3_float16_fast_b8_nowts"
+    assert [c.parallel for c in MATRICES["parallel"]()] == [1, 2, 3, 2, 3]
 
 
-def entry(mode, wer, batch=None, transcribe_s=60.0, speech_s=600.0, ok=True):
-    cell = Cell("large-v3", "float16", mode, batch, True)
+def test_partition_tracks_balances_load(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    from sessionscribe.core.bench.clip import Clip, active_seconds, init_clip
+    from sessionscribe.core.bench.runner import ClipRef, partition_tracks
+
+    folder = tmp_path / "c"
+    (folder / "tracks").mkdir(parents=True)
+    rate = 16_000
+    loud = {"gm": 8, "seat_1": 1, "seat_2": 0, "seat_3": 7, "seat_4": 2}
+    for ch, (speaker, seconds) in enumerate(loud.items(), start=1):
+        x = np.zeros(rate * 10, np.float32)
+        x[: rate * seconds] = 0.1  # -20 dBFS: active
+        sf.write(folder / "tracks" / f"ch{ch:02d}_{speaker}.wav", x, rate)
+    init_clip(folder, "hu")
+    clip = Clip.load(folder)
+    assert active_seconds(clip.track_path(clip.config.tracks[0])) == pytest.approx(8.0, abs=0.05)
+    groups = partition_tracks([ClipRef(clip, Reference(clip="c", language="hu"), folder)], 2)
+    assert sorted(len(g) for g in groups) == [2, 3]
+    gm_group = next(g for g in groups if "c/gm" in g)
+    assert "c/seat_3" not in gm_group  # the two busiest tracks go to different workers
+
+
+def test_merge_child_infos():
+    from sessionscribe.core.bench.runner import merge_child_infos
+
+    a = {
+        "ok": True,
+        "proc_start": 100.0,
+        "proc_end": 130.0,
+        "transcribe_s": 25.0,
+        "audio_s": 300.0,
+        "speech_s": 80.0,
+        "peak_ram_mb": 3000,
+        "load_s": 3.0,
+        "tracks": 4,
+    }
+    b = {
+        "ok": True,
+        "proc_start": 101.0,
+        "proc_end": 140.0,
+        "transcribe_s": 35.0,
+        "audio_s": 400.0,
+        "speech_s": 120.0,
+        "peak_ram_mb": 3100,
+        "load_s": 4.0,
+        "tracks": 3,
+    }
+    m = merge_child_infos([a, b])
+    assert m["elapsed_s"] == 40.0 and m["transcribe_s"] == 60.0 and m["audio_s"] == 700.0
+    assert m["peak_ram_mb"] == 6100 and m["load_s"] == 4.0 and m["tracks"] == 7
+    assert m["processes"] == 2
+    failed = merge_child_infos([a, {"ok": False, "error": "OOM"}])
+    assert failed["ok"] is False and failed["error"] == "OOM"
+
+
+def entry(mode, wer, batch=None, transcribe_s=60.0, speech_s=600.0, ok=True, parallel=1):
+    cell = Cell("large-v3", "float16", mode, batch, True, parallel)
     run = {"ok": ok, "transcribe_s": transcribe_s, "audio_s": 3000.0, "speech_s": speech_s}
     e = {"name": cell.name, "cell": cell.__dict__, "run": run, "derived": derived(run)}
     if ok:
@@ -138,6 +203,22 @@ def entry(mode, wer, batch=None, transcribe_s=60.0, speech_s=600.0, ok=True):
 def test_derived_projection():
     d = derived({"ok": True, "transcribe_s": 60.0, "audio_s": 3000.0, "speech_s": 600.0})
     assert d == {"rtf": 0.02, "speech_rtf": 0.1, "projected_min": 60.0}
+    # Parallel: the processing wall time counts, not the per-track sum.
+    p = derived(
+        {"ok": True, "transcribe_s": 60.0, "elapsed_s": 30.0, "audio_s": 3000.0, "speech_s": 600.0}
+    )
+    assert p["projected_min"] == 30.0
+
+
+def test_recommendation_uses_fastest_parallel_quality_variant():
+    cells = [
+        entry("quality", 0.20, transcribe_s=90.0),
+        entry("quality", 0.20, transcribe_s=50.0, parallel=3),
+        entry("fast", 0.25, 4),
+    ]
+    rec = recommend_mode(cells, 109.5)
+    assert rec["decision"] == "quality" and rec["quality_cell"].endswith("p3threads")
+    assert rec["quality_projected_min"] == 50.0
 
 
 def test_recommendation_keeps_quality_within_tolerance():

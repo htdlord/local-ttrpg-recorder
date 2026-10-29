@@ -115,3 +115,30 @@ def write_clip(folder: Path, config: ClipConfig) -> None:
     atomic_write_text(
         folder / CLIP_FILE, tomli_w.dumps(config.model_dump(mode="json", exclude_none=True))
     )
+
+
+ACTIVE_FRAME_S = 0.03
+ACTIVE_THRESHOLD_DBFS = -40.0
+
+
+def active_seconds(path: Path) -> float:
+    """Cheap workload estimate: seconds of 30 ms frames above -40 dBFS RMS (bleed included).
+
+    Used to balance tracks across parallel workers; not a speech detector.
+    """
+    import numpy as np
+
+    from sessionscribe.core.audio.reader import read_blocks
+
+    info = track_info(path)
+    frame = max(1, round(ACTIVE_FRAME_S * info.samplerate))
+    threshold = 10 ** (ACTIVE_THRESHOLD_DBFS / 20)
+    active = 0
+    rest = np.zeros(0, np.float32)
+    for block in read_blocks(path, None if info.channels == 1 else 1, block_frames=frame * 4096):
+        data = np.concatenate([rest, block])
+        n = len(data) // frame
+        frames = data[: n * frame].reshape(n, frame).astype(np.float64)
+        active += int(np.count_nonzero(np.sqrt(np.mean(frames**2, axis=1)) > threshold))
+        rest = data[n * frame :]
+    return active * frame / info.samplerate
