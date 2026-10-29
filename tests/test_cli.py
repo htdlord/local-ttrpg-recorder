@@ -101,3 +101,77 @@ def test_session_init(tmp_path):
         == (tracks / "ch02_anna.wav").resolve()
     )
     assert runner.invoke(app, ["session", "init", str(tracks), "--out", str(out)]).exit_code == 1
+
+
+def _fake_pipeline(monkeypatch):
+    from sessionscribe.core.pipeline import run
+    from tests.fakes import FakeFactory
+
+    real_process, real_export = run.process_session, run.export_session
+
+    def identity(settings):
+        return {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}
+
+    def process(session, settings, **kw):
+        kw.update(isolation="inline", factory=FakeFactory(), model_identity=identity)
+        return real_process(session, settings, **kw)
+
+    def export(session, settings, **kw):
+        return real_export(session, settings, model_identity=identity, **kw)
+
+    monkeypatch.setattr(run, "process_session", process)
+    monkeypatch.setattr(run, "export_session", export)
+
+
+def _session_folder(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    folder = tmp_path / "rec"
+    folder.mkdir()
+    x = np.zeros(48_000 * 3, np.float32)
+    x[48_000:72_000] = 0.4 * np.sin(np.arange(24_000) * 2 * np.pi * 500 / 48_000)
+    for name in ("ch01_gm", "ch02_anna"):
+        sf.write(str(folder / f"{name}.wav"), x, 48_000, subtype="FLOAT")
+    assert runner.invoke(app, ["session", "init", str(folder)]).exit_code == 0
+    return folder
+
+
+def test_transcribe_session_export_and_clean(tmp_path, monkeypatch):
+    _fake_pipeline(monkeypatch)
+    folder = _session_folder(tmp_path)
+    out = tmp_path / "out"
+    args = [
+        "transcribe",
+        "--session",
+        str(folder),
+        "-l",
+        "hu",
+        "--out",
+        str(out),
+        "--formats",
+        "json,txt,srt,vtt,md",
+    ]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert "2 chunks: 0 from cache, 2 transcribed" in result.output
+    assert sorted(p.suffix for p in out.iterdir()) == [".json", ".md", ".srt", ".txt", ".vtt"]
+    again = runner.invoke(app, ["export", "--session", str(folder), "--out", str(out)])
+    assert again.exit_code == 0, again.output
+    assert "2 from cache, 0 transcribed" in again.output
+    assert (folder / "work").is_dir()
+    assert runner.invoke(app, ["clean", "--session", str(folder), "--yes"]).exit_code == 0
+    assert not (folder / "work").exists()
+    missing = runner.invoke(app, ["export", "--session", str(folder), "--out", str(out)])
+    assert missing.exit_code == 1 and "no cached ASR result" in missing.output
+
+
+def test_transcribe_single_file_and_argument_check(tmp_path, monkeypatch):
+    _fake_pipeline(monkeypatch)
+    folder = _session_folder(tmp_path)
+    file = folder / "ch01_gm.wav"
+    result = runner.invoke(app, ["transcribe", str(file), "-l", "hu", "--out", str(tmp_path / "o")])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "o" / "ch01_gm.json").is_file()
+    both = runner.invoke(app, ["transcribe", str(file), "--session", str(folder)])
+    assert both.exit_code == 2 and "either FILE or --session" in both.output

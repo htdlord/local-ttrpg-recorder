@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 
 if TYPE_CHECKING:
+    from sessionscribe.core.merge import TranscriptSegment
     from sessionscribe.core.pipeline.asr import Segment
 
 
@@ -29,7 +30,7 @@ class AudioBlock:
 @dataclass(frozen=True)
 class SegmentEvent:
     source_id: str
-    segment: Segment
+    segment: Segment | TranscriptSegment  # track-local from ASR, session time after merge
     status: Literal["provisional", "final"] = "final"
     revision: int = 0
 

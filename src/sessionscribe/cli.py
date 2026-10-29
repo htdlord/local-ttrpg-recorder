@@ -6,6 +6,10 @@ import json
 import logging
 import math
 import os
+import re
+import shutil
+import time
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -19,9 +23,13 @@ from sessionscribe.core.audio.backend import (
     format_channel_spec,
     parse_channel_spec,
 )
+from sessionscribe.core.timeline import format_clock
 
 if TYPE_CHECKING:
     from sessionscribe.core.config import Settings
+    from sessionscribe.core.events import Event
+    from sessionscribe.core.pipeline.run import RunStats
+    from sessionscribe.core.session import Session
 
 app = typer.Typer(
     name="sessionscribe",
@@ -291,17 +299,23 @@ def _load_settings(
     config_path: Path | None,
     overrides: list[str] | None,
     cli: dict[str, Any] | None = None,
+    *,
+    session: Session | None = None,
 ) -> Settings:
     from pydantic import ValidationError
 
     from sessionscribe.core.config import DEFAULT_PRESET, load_settings
 
+    session_preset = session.config.preset if session else None
+    named = preset is not None or config_path is not None or session_preset is not None
     try:
         return load_settings(
-            preset=preset if preset is not None else (None if config_path else DEFAULT_PRESET),
+            preset=preset if named else DEFAULT_PRESET,
             config_path=config_path,
             overrides=overrides or (),
             cli=cli,
+            session=session.config.settings if session else None,
+            session_preset=session_preset,
         )
     except ValidationError as exc:
         typer.echo(f"{_badge('FAIL')} invalid settings:", err=True)
@@ -417,9 +431,68 @@ def session_init(
     )
 
 
+SessionOpt = Annotated[
+    Path | None,
+    typer.Option("--session", "-s", help="session.toml (or its folder).", exists=True),
+]
+
+
+def _open_session(path: Path) -> Session:
+    from pydantic import ValidationError
+
+    from sessionscribe.core.session import Session
+
+    try:
+        return Session.load(path)
+    except ValidationError as exc:
+        typer.echo(f"{_badge('FAIL')} invalid session file:", err=True)
+        for err in exc.errors():
+            where = ".".join(str(p) for p in err["loc"]) or "session"
+            typer.echo(f"  - {where}: {err['msg']}", err=True)
+        raise typer.Exit(2) from exc
+    except (OSError, ValueError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _progress_sink() -> Callable[[Event], None]:
+    from sessionscribe.core.events import ProgressEvent, WarningEvent
+
+    last: dict[str, int] = {}
+    started = time.monotonic()
+
+    def sink(event: Event) -> None:
+        if isinstance(event, WarningEvent):
+            typer.echo(f"{_badge('WARN')} {event.message}", err=True)
+        elif isinstance(event, ProgressEvent) and event.total and event.stage == "asr":
+            pct = int(100 * event.done / event.total)
+            if pct // 5 != last.get("asr", -1) // 5:
+                last["asr"] = pct
+                elapsed = time.monotonic() - started
+                eta = (
+                    f", ETA {format_clock(int(elapsed * (100 - pct) / pct), 1)}" if pct >= 5 else ""
+                )
+                typer.echo(f"  ASR {pct:3d} %{eta}", err=True)
+
+    return sink
+
+
+def _report(stats: RunStats, written: list[Path]) -> None:
+    typer.echo(
+        f"{stats.chunks} chunks: {stats.cached} from cache, {stats.transcribed} transcribed"
+        + (f", {stats.crashes} worker crash(es) recovered" if stats.crashes else ""),
+        err=True,
+    )
+    for path in written:
+        typer.echo(str(path))
+
+
 @app.command()
 def transcribe(
-    file: Annotated[Path, typer.Argument(help="Audio file (WAV, FLAC, RF64).", exists=True)],
+    file: Annotated[
+        Path | None, typer.Argument(help="One audio file (one speaker).", exists=True)
+    ] = None,
+    session_path: SessionOpt = None,
     preset: PresetOpt = None,
     config: ConfigOpt = None,
     set_: SetOpt = None,
@@ -440,16 +513,27 @@ def transcribe(
     ] = None,
     speaker: Annotated[str | None, typer.Option(help="Speaker id (default: file name).")] = None,
     name: Annotated[str | None, typer.Option(help="Speaker display name.")] = None,
-    out: Annotated[Path | None, typer.Option(help="Output folder (default: output/).")] = None,
-    formats: Annotated[str | None, typer.Option(help="Comma-separated: json,txt.")] = None,
-    max_duration: Annotated[float, typer.Option(help="Longest accepted file in hours.")] = 2.0,
+    out: Annotated[Path | None, typer.Option(help="Output folder.")] = None,
+    formats: Annotated[
+        str | None, typer.Option(help="Comma-separated: json,txt,srt,vtt,md.")
+    ] = None,
+    full_hash: Annotated[
+        bool, typer.Option(help="Fingerprint whole files, not just their first/last MB.")
+    ] = False,
 ) -> None:
-    """Transcribe one audio file (one speaker)."""
-    from sessionscribe.core.audio.reader import AudioReadError, load_for_asr
-    from sessionscribe.core.events import Event, ProgressEvent, WarningEvent
-    from sessionscribe.core.exporters.single import Speaker, write_outputs
-    from sessionscribe.core.pipeline.asr import AsrEngine, AsrError
+    """Transcribe a session (--session) or one audio file; completed chunks are cached."""
+    from sessionscribe.core.exporters.formats import write_session_outputs
+    from sessionscribe.core.pipeline.asr import AsrError, Cancelled
+    from sessionscribe.core.pipeline.run import process_session
 
+    if (file is None) == (session_path is None):
+        typer.echo(f"{_badge('FAIL')} give either FILE or --session", err=True)
+        raise typer.Exit(2)
+    if session_path is not None:
+        session = _open_session(session_path)
+    else:
+        assert file is not None
+        session = _file_session(file, speaker, name, channel)
     settings = _load_settings(
         preset,
         config,
@@ -467,60 +551,149 @@ def transcribe(
             vocabulary__hotwords=hotwords,
             output__formats=formats.split(",") if formats else None,
         ),
+        session=session,
     )
     _warn_mode_issues(settings)
-
-    try:
-        audio, info = load_for_asr(file, channel, max_duration * 3600.0)
-    except AudioReadError as exc:
-        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
-        raise typer.Exit(1) from exc
-    typer.echo(
-        f"{file.name}: {info.duration_s:.1f} s, {info.samplerate} Hz, {info.subtype}; "
-        f"model {settings.model.id}, {settings.asr.mode} mode",
-        err=True,
-    )
-
-    last = [-1]
-
-    def sink(event: Event) -> None:
-        if isinstance(event, WarningEvent):
-            typer.echo(f"{_badge('WARN')} {event.message}", err=True)
-        elif isinstance(event, ProgressEvent) and event.total:
-            pct = int(100 * event.done / event.total)
-            if pct // 10 != last[0] // 10:
-                last[0] = pct
-                typer.echo(f"  {pct:3d} %", err=True)
-
-    speaker_id = speaker or file.stem
-    try:
-        engine = AsrEngine.load(settings)
+    if settings.bleed.mode != "off":
         typer.echo(
-            f"Model loaded on {engine.loaded.device}/{engine.loaded.compute_type} "
-            f"in {engine.loaded.load_s:.1f} s",
+            f"{_badge('INFO')} bleed handling arrives in M3; this run keeps every segment "
+            "(bleed_mode_applied = off)",
             err=True,
         )
-        result = engine.transcribe(audio, source_id=speaker_id, sink=sink)
-    except (AsrError, ValueError) as exc:
-        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
-        raise typer.Exit(1) from exc
-
-    out_dir = out or settings.output.output_dir or Path("output")
-    who = Speaker(speaker_id, name or speaker_id, file.name)
-    try:
-        written = write_outputs(
-            result, settings, who, out_dir, file.stem, tuple(settings.output.formats)
-        )
-    except ValueError as exc:
-        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
-        raise typer.Exit(1) from exc
     typer.echo(
-        f"{len(result.segments)} segments, language {result.language}, "
-        f"RTF {result.rtf:.3f}" + (f", batch {result.batch_size}" if result.batch_size else ""),
+        f"{session.name}: {len(session.participants)} participant(s); model "
+        f"{settings.model.id}, {settings.asr.mode} mode",
         err=True,
     )
-    for path in written:
-        typer.echo(str(path))
+    try:
+        result, stats = process_session(
+            session, settings, sink=_progress_sink(), full_hash=full_hash
+        )
+        written = write_session_outputs(result, _out_dir(session, settings, out))
+        _save_last_settings(session, settings)
+    except KeyboardInterrupt as exc:
+        typer.echo(f"{_badge('WARN')} cancelled; completed chunks stay cached", err=True)
+        raise typer.Exit(130) from exc
+    except (AsrError, Cancelled, ValueError, OSError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    _report(stats, written)
+
+
+def _file_session(
+    file: Path, speaker: str | None, name: str | None, channel: int | None
+) -> Session:
+    from sessionscribe.core.session import Participant, Session, SessionConfig
+
+    pid = speaker or re.sub(r"[^A-Za-z0-9_-]+", "_", file.stem).strip("_-") or "speaker"
+    config = SessionConfig(
+        name=file.stem,
+        participants=[Participant(id=pid, name=name or pid, source=file.name, channel=channel)],
+    )
+    return Session(file.parent, config)
+
+
+LAST_SETTINGS = "last_settings.json"
+
+
+def _save_last_settings(session: Session, settings: Settings) -> None:
+    """Remember the settings of the last transcription so ``export`` finds its cache."""
+    from sessionscribe.core.fileio import atomic_write_json
+
+    work = session.work_dir(settings.output.work_dir)
+    atomic_write_json(work / LAST_SETTINGS, settings.model_dump(mode="json"))
+
+
+def _export_settings(
+    session: Session,
+    preset: str | None,
+    config: Path | None,
+    set_: list[str] | None,
+    cli: dict[str, Any],
+) -> Settings:
+    """The last transcription's settings plus --set/--formats, unless a preset/config is given."""
+    from pydantic import ValidationError
+
+    from sessionscribe.core.config import Settings, deep_merge, parse_override
+
+    settings = _load_settings(preset, config, set_, cli, session=session)
+    last = session.work_dir(settings.output.work_dir) / LAST_SETTINGS
+    if preset is not None or config is not None or not last.is_file():
+        return settings
+    data = json.loads(last.read_text(encoding="utf-8"))
+    try:
+        for item in set_ or ():
+            data = deep_merge(data, parse_override(item))
+        return Settings.model_validate(deep_merge(data, cli))
+    except (ValidationError, ValueError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _out_dir(session: Session, settings: Settings, out: Path | None) -> Path:
+    configured = out or settings.output.output_dir
+    if configured is None:
+        return session.folder / "output"
+    return configured
+
+
+@app.command()
+def export(
+    session_path: Annotated[
+        Path, typer.Option("--session", "-s", help="session.toml (or its folder).", exists=True)
+    ],
+    preset: PresetOpt = None,
+    config: ConfigOpt = None,
+    set_: SetOpt = None,
+    out: Annotated[Path | None, typer.Option(help="Output folder.")] = None,
+    formats: Annotated[
+        str | None, typer.Option(help="Comma-separated: json,txt,srt,vtt,md.")
+    ] = None,
+) -> None:
+    """Re-export from the cache without ASR (after renaming, offset or output changes).
+
+    Uses the settings of the last ``transcribe --session`` run plus --set/--formats;
+    --preset or --config resolve settings afresh instead.
+    """
+    from sessionscribe.core.exporters.formats import write_session_outputs
+    from sessionscribe.core.pipeline.asr import AsrError
+    from sessionscribe.core.pipeline.run import export_session
+
+    session = _open_session(session_path)
+    settings = _export_settings(
+        session,
+        preset,
+        config,
+        set_,
+        _cli_settings(output__formats=formats.split(",") if formats else None),
+    )
+    try:
+        result, stats = export_session(session, settings)
+        written = write_session_outputs(result, _out_dir(session, settings, out))
+    except (AsrError, ValueError, OSError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    _report(stats, written)
+
+
+@app.command()
+def clean(
+    session_path: Annotated[
+        Path, typer.Option("--session", "-s", help="session.toml (or its folder).", exists=True)
+    ],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
+) -> None:
+    """Delete the session's work folder (cache with transcript text); raw audio stays."""
+    session = _open_session(session_path)
+    settings = _load_settings(None, None, None, session=session)
+    work = session.work_dir(settings.output.work_dir)
+    if not work.exists():
+        typer.echo(f"Nothing to delete: {work} does not exist")
+        return
+    if not yes and not typer.confirm(f"Delete {work} and everything in it?"):
+        raise typer.Exit(1)
+    shutil.rmtree(work)
+    typer.echo(f"Deleted {work}")
 
 
 from sessionscribe.cli_bench import bench_app  # noqa: E402
