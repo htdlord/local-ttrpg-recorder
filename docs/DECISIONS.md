@@ -147,3 +147,29 @@ Notes:
   - Fixed batch sizes are used in the matrix, so an OOM shows as a failed cell instead of a silent fallback.
   - Reports contain numbers only. Transcripts stay in the git-ignored `work/bench/<run>/cells/`.
 - **Default-mode criterion (owner):** quality stays the default if, on the default configuration (large-v3, float16, word timestamps), its projected time for 10 h of speech is ≤ 60 min **and** its WER is at most **1 percentage point** worse than the best fast cell; otherwise SPEC §3.2 is reopened. **A decision based on the 109 s clip is provisional:** repeat it with a ≥ 5 min clip (SPEC §11.1) before the M3 tolerances are fixed.
+
+## 2026-10-29 – M1 benchmark, first run (draft reference, provisional)
+
+32-cell `m1` matrix on clip01 (7 tracks × 109.5 s = 766 s of audio; 202.5 s of VAD speech, bleed included), RTX 4070 Ti Super. The reference is still the **unverified import draft** (`draft/import.json`), so WER mostly measures agreement with the old tool's transcript. Rescore with `bench score work/bench/20261029-212243` once `reference.json` is verified; no ASR rerun is needed.
+
+| configuration | WER % | recall % | speech RTF | 10 h speech (min) | VRAM MiB* |
+|---|---|---|---|---|---|
+| large-v3 float16 quality wts | **21.9** | 86.7 | 0.181 | 109 | 4335 |
+| large-v3 float16 fast b4 wts | 25.1 | 85.0 | 0.075 | 45 | 5130 |
+| large-v3 float16 fast b8/b16 wts | 25.6 | 83.3 | 0.068 | 40 | 5390–5503 |
+| large-v3 int8_float16 quality wts | 26.8 | 78.3 | 0.230 | 138 | 2556 |
+| large-v3 int8_float16 fast b8 wts | 40.4 | 61.7 | 0.077 | 46 | 3534 |
+| large-v3-turbo float16 quality wts | 36.2 | 71.7 | 0.050 | 30 | 2345 |
+| large-v3-turbo float16 fast b4 wts | 38.7 | 68.3 | 0.025 | 15 | 2858 |
+
+\* device total minus baseline (no per-process value under WDDM). The full table is in the run's `results.md`.
+
+Observations:
+- **Silent tracks:** every cell produced 0 words on the 4 silent tracks; VAD + large-v3/turbo did not hallucinate there.
+- **Compute type:** int8_float16 costs large-v3 about 5 pp in quality mode and about 15 pp in fast mode, and is not faster here. float16 stays the default.
+- **Batch size:** 4, 8 and 16 differ by less than 1 pp WER and barely in speed on a clip this short. Too few chunks to tell; re-measure on the longer clip.
+- **Turbo:** 2.5–3.5× faster than large-v3, but about 14 pp worse WER on Hungarian.
+- **`nowts` cells are penalised by the metric:** without word timestamps, words are spread evenly over segments (in fast mode, VAD chunks of up to 30 s), so many land outside the reference windows. Their WER and recall are not comparable to the `wts` cells. Word timestamps stay on by default anyway.
+- **Criterion result: `revisit`.** Quality has the better WER (21.9 % vs 25.1 %, well beyond the 1 pp tolerance), but its projected 109 min for 10 h of speech exceeds the 60 min budget. Per-track overhead weighs more on a 109 s clip, so the projection is likely pessimistic.
+
+**Provisional decision:** the default stays `quality`, unchanged until the verified reference and a ≥ 5 min clip are measured. On these numbers, quality is the only configuration within reach of the best accuracy. Fast b4 (+3.2 pp WER, 45 min) is the candidate for a "faster" preset or for the later hybrid mode (SPEC §14). The SPEC §3.2 rationale (finishing a session in "well under an hour") is not confirmed and is reopened for that re-measurement.
