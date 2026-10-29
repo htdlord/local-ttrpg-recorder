@@ -129,3 +129,33 @@ class FakeFactory:
         if self.fail_load:
             raise RuntimeError("no model here")
         return FakeEngine(self.calls, self.crash_state, self.crash_on)
+
+
+class OomBatched:
+    """Batched pipeline that runs out of memory above ``limit``; records the sizes tried."""
+
+    def __init__(self, limit: int, sizes: list[int]) -> None:
+        self.limit, self.sizes = limit, sizes
+
+    def transcribe(self, audio, batch_size, **kwargs):
+        from types import SimpleNamespace
+
+        self.sizes.append(batch_size)
+
+        def gen():
+            if batch_size > self.limit:
+                raise RuntimeError("CUDA failed with error out of memory")
+            yield from ()
+
+        return gen(), SimpleNamespace(language="hu", language_probability=0.9)
+
+
+@dataclass
+class OomFactory:
+    limit: int
+    sizes: list[int]
+
+    def __call__(self, settings):
+        from sessionscribe.core.pipeline.asr import AsrEngine
+
+        return AsrEngine(settings, object(), LOADED, lambda m: OomBatched(self.limit, self.sizes))
