@@ -194,7 +194,7 @@ Matrix `parallel` (also part of `m1`): large-v3 float16 quality with word timest
 
 ## Open tasks (M1)
 
-- [ ] Re-score `work/bench/20261029-212243` and `work/bench/20261029-214701` with the hand-corrected, verified clip01 reference (`bench score`); record the numbers, then merge PR #2.
+- [x] ~~Re-score with the verified clip01 reference, then merge PR #2.~~ Superseded on 2026-10-30, see "M1 closed on the unverified reference" below.
 - [ ] Repeat the M1 benchmark (incl. `parallel`) with a ≥ 5 min clip (SPEC §11.1) and settle the default ASR mode; required before the M3 tolerances are fixed.
 
 ## 2026-10-29 – Default ASR mode decided by WER (owner decision)
@@ -217,3 +217,46 @@ Prompted by the intermittent 0xC0000005 crash of a child process near the VRAM l
 
 - `asr.batch_size` is the **starting** batch size (default 16). On GPU OOM, fast mode halves it down to 1 and then fails with a clear error. This also applies to the `fast` preset (4 → 2 → 1), so it works on smaller GPUs. Non-powers of two halve with rounding down (6 → 3 → 1).
 - New setting `asr.oom_fallback` (default `true`, fast mode only) switches the fallback off. Benchmark cells set it to `false`, so a fixed batch size that does not fit shows up as a failed cell instead of quietly measuring a smaller batch.
+
+## 2026-10-30 – M1 closed on the unverified reference; triage reference before M3 (owner decision)
+
+- **The verbatim correction of clip01 is not done; PR #2 is merged with `reference.json` absent and the import draft as the reference.** All M1 WER and recall figures above were measured against the **old tool's transcript** (`draft/import.json`, status `draft`). They are **informational only**: they show how far each configuration is from that transcript, not its true error rate.
+- **The mode choice does not depend on them.** It rests on the ranking: on the same reference, quality beats fast b4 by 3.2 pp (21.9 % vs 25.1 %), beyond the 1 pp tolerance, and it is the best cell overall. The default stays `quality`, and the `fast` preset stays optional. Re-checking the ranking on the ≥ 5 min clip (open task below) is still planned.
+- **Verbatim reference transcripts move to SPEC §14 (later).** WER against a hand-corrected text is not needed until we tune recognition itself.
+
+### Triage reference (M3 prerequisite)
+
+M3 measures what bleed handling removes or keeps, not how words are recognised. For that, every transcribed segment only needs a judgement, not a corrected text. Planned workflow, `sessionscribe bench ref triage CLIP`:
+
+- **Units:** our own per-track segments with bleed handling off (`ref draft`, i.e. exactly what M3 filters). Each unit has an id, a track, start and end. No text is edited.
+- **Labels, one key each:**
+  - `s` real speech by the track's owner;
+  - `b` bleed: another participant's voice that their own track also has (a duplicate), with an optional source digit `1`–`8`;
+  - `w` wrong speaker: real speech, the only copy, but on the wrong track; a digit gives the true speaker (suppressing it would lose speech);
+  - `o` own speech plus audible bleed in the same segment;
+  - `n` no speech (noise, hallucination);
+  - `?` unsure, excluded from scoring.
+- **Playback in the terminal** via `sounddevice` (already a dependency, so no new packages): the unit plays automatically from the owner's track, with 0.3 s of context. Further keys:
+  - `space` replays it;
+  - `m` plays all tracks mixed;
+  - `x` plays the loudest other track at the same time;
+  - `u` undoes the last label;
+  - `q` saves and quits.
+- **Suggestions to accept with Enter:** a level-ratio heuristic against the other tracks, plus our draft's text similarity, propose `s` or `b`. Most units should then need only Enter. The ASR text is shown in the terminal as an aid and is never written to logs.
+- **Storage:** after every key, the labels are written atomically to `bench/refs/<clip>/triage.json` (git-ignored, schema-versioned, `status: draft|complete`). A later run resumes at the first unlabelled unit. If the draft is regenerated, labels carry over by time overlap and speaker; units that no longer match are listed.
+- **Table fallback:** `ref triage --export triage.csv` / `--import triage.csv` (id, track, start, end, suggestion, label), with the Audacity label files from `ref labels` for listening. This is for anyone who prefers a spreadsheet.
+- **Metrics from a triage reference** (SPEC §11.2), each compared with `bleed_mode=off`:
+  - speech recall and false suppression over `s`, `w` and `o`;
+  - residual duplicate rate over `b`;
+  - speaker attribution over `w` and `b` with a source;
+  - silent-track output over `n`.
+  - WER and CER are reported only where a verbatim reference exists.
+- **Effort estimate:** about 2–4 s per unit, so 5 min for clip01 (about 60–70 units) and 15–20 min for a 5 min clip.
+
+Built at the start of M3, before any M3 measurement. M3 acceptance needs complete triage references for clip01 and the ≥ 5 min clip(s).
+
+## Open tasks (after M1)
+
+- [x] ~~Re-score M1 with a verified verbatim reference before merging PR #2.~~ Dropped: verbatim reference moved to SPEC §14, and PR #2 was merged on the unverified reference (above).
+- [ ] Repeat the M1 benchmark (incl. `parallel`) with a ≥ 5 min clip (SPEC §11.1) and confirm the quality-vs-fast WER ranking. Required before the M3 tolerances are fixed.
+- [ ] Triage reference (`bench ref triage`) and complete triage of clip01 and the ≥ 5 min clip(s): M3 prerequisite.
