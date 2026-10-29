@@ -309,7 +309,9 @@ def _clips(refs: Path, clip: list[str] | None, allow_draft: bool):  # -> list[Cl
 @bench_app.command("run")
 def bench_run(
     refs: RefsOpt = Path("bench/refs"),
-    matrix: Annotated[str, typer.Option(help="Cell matrix: m1 or quick.")] = "m1",
+    matrix: Annotated[
+        str, typer.Option(help="Cell matrix: m1, parallel, chunking or quick.")
+    ] = "m1",
     clip: Annotated[list[str] | None, typer.Option(help="Only these clips.")] = None,
     cells: Annotated[
         str | None, typer.Option(help="Only cells whose name contains this text.")

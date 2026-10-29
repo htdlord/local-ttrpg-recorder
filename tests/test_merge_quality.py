@@ -70,16 +70,24 @@ def test_join_same_speaker():
     ("changes", "flag"),
     [
         ({"avg_logprob": -1.5}, q.LOW_LOGPROB),
-        ({"no_speech_prob": 0.9}, q.HIGH_NO_SPEECH),
+        ({"no_speech_prob": 0.9, "avg_logprob": -0.8}, q.HIGH_NO_SPEECH),
         ({"compression_ratio": 3.0}, q.HIGH_COMPRESSION),
         ({"text": "nem nem nem " * 4}, q.REPETITION),
         ({"text": "á" * 80}, q.TOO_LONG),
+        ({"text": "á" * 40, "end": int(0.3 * R)}, q.TOO_LONG),
     ],
 )
 def test_quality_flags_positive_and_negative(changes, flag):
     vad = [SpeechInterval(0, 3 * R)]
     assert q.quality_flags(seg(0, 0, 2), QS, vad=vad) == []
     assert flag in q.quality_flags(seg(0, 0, 2, **changes), QS, vad=vad)
+
+
+def test_window_level_no_speech_alone_is_not_flagged():
+    # no_speech_prob is shared by a whole 30 s window; a confident decode is not silence
+    assert q.quality_flags(seg(0, 0, 2, no_speech_prob=0.9), QS, vad=None) == []
+    # a short word with tight timestamps is not "too long"
+    assert q.quality_flags(seg(0, 0, 0.3, text="szervusz"), QS, vad=None) == []
 
 
 def test_vad_and_gap_flags():

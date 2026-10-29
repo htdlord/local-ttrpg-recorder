@@ -132,6 +132,11 @@ def test_matrix_m1_shape():
     ]
     assert Cell("large-v3", "float16", "fast", 8, False).name == "large-v3_float16_fast_b8_nowts"
     assert [c.parallel for c in MATRICES["parallel"]()] == [1, 2, 3, 2, 3]
+    assert [c.name for c in MATRICES["chunking"]()] == [
+        "large-v3_float16_quality_wts",
+        "large-v3_float16_quality_wts_own30",
+        "large-v3_float16_quality_wts_own60",
+    ]
 
 
 def test_partition_tracks_balances_load(tmp_path):
