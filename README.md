@@ -17,6 +17,33 @@ timestamped transcript (txt, srt, vtt, json, md).
 See [docs/SPEC.md](docs/SPEC.md) for the specification and
 [docs/DECISIONS.md](docs/DECISIONS.md) for the decision log.
 
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+.
+
+```bash
+uv sync                      # add --extra cuda for pip-installed cuBLAS/cuDNN 9
+uv run pre-commit install
+uv run ruff check . && uv run ruff format .
+uv run pytest -m "not gpu and not slow and not audio_hw"   # fast suite (= CI)
+uv run pytest -m "gpu or slow or audio_hw"                 # local: GPU, real model, audio interface
+```
+
+Hardware checks:
+
+```bash
+uv run sessionscribe doctor                                   # versions, CUDA, real inference, audio
+uv run sessionscribe doctor --host-api asio --channels 1-8    # also opens an 8-channel ASIO stream
+uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
+```
+
+`record-probe` writes one 24-bit FLAC per channel to `work/probe/<timestamp>/` (use
+`--no-write` to only count) and reports frame counts, overflows, timestamp continuity,
+clock deviation and per-channel peak/RMS levels.
+
+CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
+(`uv sync --extra cuda`) or a system CUDA/cuDNN; `doctor` shows where each library was found.
+
 ## Privacy
 
 Participants' voices are personal data. Whoever records a session is responsible
