@@ -41,6 +41,18 @@ uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
 `--no-write` to only count) and reports frame counts, overflows, timestamp continuity,
 clock deviation and per-channel peak/RMS levels.
 
+Transcribe a session (one file or segment folder per participant):
+
+```bash
+uv run sessionscribe session init recordings/2026-10-29/      # writes session.toml; edit names/offsets
+uv run sessionscribe transcribe --session recordings/2026-10-29 -l hu --formats json,txt,srt,vtt,md
+uv run sessionscribe export --session recordings/2026-10-29   # after renaming / offsets: no ASR
+uv run sessionscribe clean --session recordings/2026-10-29    # delete the work folder (cache)
+```
+
+Completed chunks are cached in `<session>/work/` (it contains transcript text), so an
+interrupted run resumes and renaming or moving a participant only re-exports.
+
 Transcribe one file and inspect settings:
 
 ```bash
