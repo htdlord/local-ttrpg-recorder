@@ -231,6 +231,7 @@ File fingerprint: size + mtime + hash of first/last MB (fast), full hash optiona
 ### 8.1 Stream and threads
 
 - **One input stream** covering all needed channels of the interface (keeps channels mutually sample-aligned even through dropouts).
+- **Explicit device selection:** the recorder never auto-selects a device. The user picks device and host API explicitly; device name, index, host API, channel selection and stream settings are saved in the manifest. (Auto-selection exists only in the M0 `record-probe`/`doctor` tools.)
 - The PortAudio callback only copies the block into a **preallocated, bounded ring buffer** and records status flags. No file I/O, no allocation, no locks that can block.
 - A writer thread drains the buffer, converts, and writes files.
 - Exceptions in the callback or writer are caught, set a fatal state and are surfaced in the GUI immediately; a watchdog checks `stream.active` and that frames keep arriving.
@@ -309,8 +310,8 @@ Bleed handling is always compared against `bleed_mode=off` on the same clips.
 | M2 | Multi-track: participants, offsets, time model, chunking with owned/context ranges, layered cache, merge, all exporters, quality flags | Chunk-boundary tests pass; re-export / rename / offset change (post mode) without re-ASR; stable segment ids; 8 synthetic tracks + real clips merge correctly |
 | M3 | Coupling (auto + guided), ownership, post/pre modes, dedup with evidence rules, overlap marking | On the reference set vs `off`: speech recall does not drop beyond an agreed tolerance, no hand-marked overlap is lost silently, residual duplicates substantially reduced; tolerances fixed from first measurements and written to DECISIONS |
 | M4 | GUI: Session, Settings, Run, Result (review + playback), i18n, themes | Full workflow A from GUI; cancel + resume; flagged items reviewable |
-| M5 | Recorder: device/channel browser, meters, guided mic check, segmented writer, manifest, recovery | 8 h, 8-ch recording on reference machine without loss; fault injection: device unplug, low disk, slowed disk writes, process kill → manifest correctly reports what exists and what is missing; restart recovery works |
-| M6 | Release: README (EN + HU summary), supported-configuration matrix, licence notices, install tests on Windows and Linux, optional one-dir build | Fresh install on both OSes following README succeeds |
+| M5 | Recorder: device/channel browser with explicit device + host API selection saved in the manifest (§8.1), meters, guided mic check, segmented writer, manifest, recovery | 8 h, 8-ch recording on reference machine without loss; fault injection: device unplug, low disk, slowed disk writes, process kill → manifest correctly reports what exists and what is missing; restart recovery works |
+| M6 | Release: README (EN + HU summary), supported-configuration matrix, licence notices, install tests on Windows and Linux, optional one-dir build | Fresh install on both OSes following README succeeds; on a clean environment **without system CUDA/cuDNN in PATH** the `cuda` extra alone is sufficient (`doctor` passes incl. real CUDA inference) |
 
 ## 14. Later features (do not design out)
 
