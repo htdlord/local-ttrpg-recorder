@@ -84,3 +84,66 @@ Notes:
 - Clock deviation is far below the 200 ppm WARN threshold on both APIs.
 - Levels were informational (no defined input signal): channels 2–3 at about −90…−96 dBFS RMS look unconnected/at minimum gain; channel 1 peaked at −0.0 dBFS on the ASIO run (clipping on a transient). Neither affects the probe verdict; gain staging is a setup task, and a clipping indicator belongs in the M5 recorder level meters.
 - Device was auto-selected on both runs (allowed for probe only, see above).
+
+## 2026-10-29 – M1 plan and implementation
+
+- **Dependencies (owner-approved):** `pydantic` and `tomli-w` at runtime; `jiwer` dev-only (the `bench` commands import it lazily and say so if it is missing). `av` (PyAV) is now declared directly because we import it; it was already installed through faster-whisper.
+- **Resampler: PyAV (libswresample), not our own FIR.** Evaluated first as requested. Measured on the reference machine (av 19.0.2):
+  - alignment: an impulse at 24 000 (48 kHz) lands at exactly 8 000 (16 kHz) once flushed;
+  - block invariance: output is identical for 4 800- and 1 024-frame blocks;
+  - 10 kHz alias: −99 dB; 7 kHz passband: −0.4 dB;
+  - speed: 600 s of audio resamples in 0.12 s.
+
+  That leaves nothing a custom resampler would add. Consequence: the `asr` cache key (M2) must include the `av` version.
+- **Settings model** (`core.config`, pydantic v2, `schema_version = 1`, migration registry):
+  - Layers: defaults → preset → config file → `--set section.field=value` (TOML-parsed value) → CLI flags.
+  - Built-in presets: `conversation` (the default: quality, large-v3, SPEC §3.4 VAD) and `fast-draft` (fast, large-v3-turbo). User presets live in `<config dir>/presets/*.toml`. Config dir: `%APPDATA%\sessionscribe` on Windows; `$XDG_CONFIG_HOME/sessionscribe` (or `~/.config/sessionscribe`) on Linux.
+  - Language default is `auto` with a CLI warning; the bench takes the language from `clip.toml`.
+  - `.en` and distil models force `en`; any other language is a validation error.
+  - `hallucination_silence_threshold` needs word timestamps.
+  - Fast mode needs VAD.
+  - Device and compute type are checked at run time (`resolve_runtime`), so a settings file stays loadable on a machine without a GPU.
+  - The `bleed`, `dedup` and `output` sections already exist with SPEC defaults; the stages that use them come later.
+- **Mode metadata and what faster-whisper 1.2.1 actually does.** Pinned by `tests/test_asr_regression.py` (`slow`, tiny model; it records the real ctranslate2 `generate` calls and the `TranscriptionOptions` that are built) and by `test_mode_table_is_pinned` plus a version pin in the fast suite. In `BatchedInferencePipeline`:
+  - only `temperature[0]` is used, with no fallback;
+  - `best_of` is not used;
+  - `condition_on_previous_text` is forced to `False` and `hallucination_silence_threshold` to `None`;
+  - `log_prob`, `no_speech` and `compression_ratio` thresholds never trigger anything;
+  - a VAD *dict* gets `max_speech_duration_s` replaced by 30 s, while a `VadOptions` object is used as given;
+  - the library's own default VAD has min_silence 160 ms.
+
+  Consequences:
+  - Fast mode passes only the parameters it honours.
+  - VAD settings always go as a `VadOptions` object.
+  - `mode_issues` warns only about values the user set explicitly that the chosen mode ignores; default values are documented per mode instead.
+  - In quality mode the fallback and `best_of` demonstrably work.
+  - Note for tests: the `no_speech` check deliberately turns a retry into "silence".
+- **Fast mode keeps the library's `without_timestamps=True`.** Segments are then VAD chunks of up to 30 s; word timestamps still give word-level times. The exporters may split long segments at word gaps in M2.
+- **M1 single-file limit:** a track is loaded whole at 16 kHz (about 230 MB per hour), with a default maximum of 2 h (`--max-duration`). Chunking with owned and context ranges comes in M2, as SPEC §5.1 describes.
+- **VAD intervals** (SPEC §3.4) come from our own `get_speech_timestamps` call with the same options. The VAD therefore runs twice per track (ours and the library's), a small cost that keeps both sets of intervals identical.
+- **txt timestamps** are truncated to the second (`[00:00:02]` for 2.9 s).
+- **Bench code lives in `core/bench/`** (a package instead of a single `bench.py`): `clip`, `reference`, `labels`, `draft`, `diff`, `text`, `metrics`, `runner`, `cell`, `resources`.
+- **Reference workflow (owner decisions):**
+  - Hand correction is an Audacity label round-trip; the draft starts from the imported existing transcript, plus our own large-v3 draft and a disagreement list.
+  - The clip folder layout is `bench/refs/<clip>/`.
+  - Label files are UTF-8 without BOM, written by us and tolerated (BOM stripped) on input.
+  - Label text is `speaker | id [tags] text`. The speaker sits in the text because Audacity's label export drops track names. A `_` prefix marks a line as not that speaker's speech (kept in `excluded` with a reason), and labels deleted anyway are kept as "deleted while editing", so nothing disappears without a trace.
+  - `reference.json` is canonical and generated; `--verified` forbids leftover `?` draft hints.
+  - Details: `docs/REFERENCE_GUIDE.md`.
+- **clip01:** 7 tracks (ch02 is unused) of 109.5 s, Hungarian. 4 tracks (`seat_2`, `seat_4`, `seat_5`, `seat_6`) contain no reference speech, which suits the silent-track metric. The import gave 64 segments: 60 utterances and 4 bleed candidates. The large-v3 diff shows 38 matching passages and 33 to check.
+- **Metrics (M1):**
+  - **WER/CER** count only hypothesis words whose midpoint lies within ±0.3 s of the speaker's own reference utterances, so bleed is not counted against recognition (that is M3).
+  - **Speech recall:** an utterance counts as found when at least 50 % of its words are hits.
+  - **Outside words** (on tracks with speech) and the **silent-track** output (words, segments and seconds on tracks without any reference speech, i.e. hallucination or bleed) are reported separately (owner request).
+  - **Timestamp error:** median |start| and |end| error of found utterances.
+  - **Averaging:** micro-averaged over tracks and clips.
+  - **Without word timestamps,** word times are spread evenly over the segment, and the report flags it.
+  - **Normalisation:** NFC, lower case, `[…]` removed, punctuation removed (except `-` and `'` inside words), accents kept.
+- **Benchmark runs:**
+  - Every matrix cell runs in its own process for clean peak RAM/VRAM figures and to survive OOM.
+  - The model load and a warm-up are measured separately and are not part of the RTF.
+  - Peak RAM comes from `GetProcessMemoryInfo` or `getrusage`. VRAM comes from `nvidia-smi`: per process where the driver reports it, otherwise device total minus baseline, marked `*` (Windows WDDM).
+  - Speech RTF = processing time / VAD speech time; projection = 10 h of speech.
+  - Fixed batch sizes are used in the matrix, so an OOM shows as a failed cell instead of a silent fallback.
+  - Reports contain numbers only. Transcripts stay in the git-ignored `work/bench/<run>/cells/`.
+- **Default-mode criterion (owner):** quality stays the default if, on the default configuration (large-v3, float16, word timestamps), its projected time for 10 h of speech is ≤ 60 min **and** its WER is at most **1 percentage point** worse than the best fast cell; otherwise SPEC §3.2 is reopened. **A decision based on the 109 s clip is provisional:** repeat it with a ≥ 5 min clip (SPEC §11.1) before the M3 tolerances are fixed.
