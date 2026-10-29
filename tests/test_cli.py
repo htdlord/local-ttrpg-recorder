@@ -27,9 +27,7 @@ def test_config_show_and_validate(tmp_path):
     assert result.exit_code == 0 and 'language = "hu"' in result.output
 
     path = tmp_path / "s.toml"
-    assert (
-        runner.invoke(app, ["config", "init", str(path), "--preset", "fast-draft"]).exit_code == 0
-    )
+    assert runner.invoke(app, ["config", "init", str(path), "--preset", "fast"]).exit_code == 0
     assert runner.invoke(app, ["config", "init", str(path)]).exit_code == 1  # no overwrite
     result = runner.invoke(app, ["config", "validate", str(path)])
     assert result.exit_code == 0 and "mode fast" in result.output
@@ -42,9 +40,7 @@ def test_config_reports_invalid_settings():
 
 def test_presets_list():
     result = runner.invoke(app, ["presets", "list"])
-    assert (
-        result.exit_code == 0 and "conversation" in result.output and "fast-draft" in result.output
-    )
+    assert result.exit_code == 0 and "conversation" in result.output and "fast" in result.output
 
 
 def test_bench_reference_workflow(tmp_path):

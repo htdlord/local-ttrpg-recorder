@@ -228,12 +228,14 @@ def test_recommendation_keeps_quality_within_tolerance():
     assert rec["best_fast_cell"].endswith("b8_wts")
 
 
-def test_recommendation_revisits_when_worse_or_slow():
+def test_recommendation_is_decided_by_wer_only():
     assert recommend_mode([entry("quality", 0.22), entry("fast", 0.20, 8)], 1)["decision"] == (
         "revisit"
     )
-    slow = [entry("quality", 0.20, transcribe_s=70.0), entry("fast", 0.20, 8)]
-    assert recommend_mode(slow, 1)["decision"] == "revisit"
+    # Slow quality is fine (owner: several hours of processing are acceptable).
+    slow = [entry("quality", 0.20, transcribe_s=600.0), entry("fast", 0.20, 8)]
+    rec = recommend_mode(slow, 1)
+    assert rec["decision"] == "quality" and rec["quality_projected_min"] == 600.0
     assert recommend_mode([entry("fast", 0.2, 8)], 1)["decision"] is None
 
 

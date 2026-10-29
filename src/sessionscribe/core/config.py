@@ -367,8 +367,9 @@ def user_config_dir() -> Path:
 BUILTIN_PRESETS: dict[str, dict[str, Any]] = {
     # Default: quality mode, large-v3, conversation VAD (the Settings defaults).
     "conversation": {},
-    # Quick draft: batched turbo model; anti-hallucination retries are not available.
-    "fast-draft": {"model": {"id": "large-v3-turbo"}, "asr": {"mode": "fast"}},
+    # Optional, faster: batched large-v3 at batch size 4 (M1 benchmark: about 2.4x faster,
+    # +3 pp WER); temperature fallback and anti-hallucination retries are not available.
+    "fast": {"asr": {"mode": "fast", "batch_size": 4}},
 }
 DEFAULT_PRESET = "conversation"
 

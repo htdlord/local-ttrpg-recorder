@@ -46,7 +46,7 @@ Transcribe one file and inspect settings:
 ```bash
 uv run sessionscribe transcribe track.flac --language hu --out output/   # json + txt
 uv run sessionscribe transcribe track.flac --language hu --mode fast     # batched pipeline
-uv run sessionscribe config show --preset fast-draft --set decoding.beam_size=3
+uv run sessionscribe config show --preset fast --set decoding.beam_size=3
 uv run sessionscribe config init my-settings.toml
 uv run sessionscribe config validate my-settings.toml
 uv run sessionscribe presets list

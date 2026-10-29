@@ -98,7 +98,7 @@ def test_quality_kwargs():
 
 
 def test_fast_kwargs_leave_out_ignored_settings():
-    s = load_settings(preset="fast-draft", overrides=["decoding.temperature=[0.2, 0.4]"])
+    s = load_settings(preset="fast", overrides=["decoding.temperature=[0.2, 0.4]"])
     kw = transcribe_kwargs(s)
     assert kw["temperature"] == [0.2]
     for key in (
@@ -137,7 +137,8 @@ def test_quality_transcribe_converts_to_samples():
 def test_fast_mode_halves_batch_on_oom():
     events = []
     fake = FakeBatched(oom_above=4)
-    engine = AsrEngine(load_settings(preset="fast-draft"), object(), LOADED, lambda m: fake)
+    probing = load_settings(cli={"asr": {"mode": "fast"}})  # no fixed batch size
+    engine = AsrEngine(probing, object(), LOADED, lambda m: fake)
     result = engine.transcribe(audio(), source_id="p1", sink=events.append)
     assert fake.sizes == [16, 8, 4]
     assert result.batch_size == 4 and len(result.segments) == 2
@@ -146,14 +147,15 @@ def test_fast_mode_halves_batch_on_oom():
 
 def test_fast_mode_gives_up_with_clear_error():
     fake = FakeBatched(oom_above=0)
-    engine = AsrEngine(load_settings(preset="fast-draft"), object(), LOADED, lambda m: fake)
+    probing = load_settings(cli={"asr": {"mode": "fast"}})
+    engine = AsrEngine(probing, object(), LOADED, lambda m: fake)
     with pytest.raises(AsrError, match="even at batch size 1"):
         engine.transcribe(audio(), source_id="p1")
 
 
 def test_fixed_batch_size_is_not_probed():
     fake = FakeBatched(oom_above=4)
-    s = load_settings(preset="fast-draft", overrides=["asr.batch_size=8"])
+    s = load_settings(preset="fast", overrides=["asr.batch_size=8"])
     with pytest.raises(AsrError):
         AsrEngine(s, object(), LOADED, lambda m: fake).transcribe(audio(), source_id="p1")
     assert fake.sizes == [8]

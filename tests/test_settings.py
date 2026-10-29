@@ -30,19 +30,19 @@ def test_layer_order(tmp_path):
     cfg = tmp_path / "s.toml"
     cfg.write_text('[decoding]\nbeam_size = 3\nlanguage = "en"\n', encoding="utf-8")
     s = load_settings(
-        preset="fast-draft",
+        preset="fast",
         config_path=cfg,
         overrides=["decoding.beam_size=2"],
         cli={"decoding": {"language": "hu"}},
     )
-    assert s.model.id == "large-v3-turbo" and s.asr.mode == "fast"  # preset
+    assert s.model.id == "large-v3" and s.asr.mode == "fast" and s.asr.batch_size == 4  # preset
     assert s.decoding.beam_size == 2  # --set beats file
     assert s.decoding.language == "hu"  # CLI beats everything
 
 
 def test_config_file_can_name_its_preset(tmp_path):
     cfg = tmp_path / "s.toml"
-    cfg.write_text('preset = "fast-draft"\n', encoding="utf-8")
+    cfg.write_text('preset = "fast"\n', encoding="utf-8")
     assert load_settings(preset=None, config_path=cfg).asr.mode == "fast"
 
 
@@ -94,7 +94,7 @@ def test_hallucination_threshold_needs_word_timestamps():
 
 def test_fast_mode_needs_vad():
     with pytest.raises(ValidationError, match="needs VAD"):
-        load_settings(preset="fast-draft", overrides=["vad.enabled=false"])
+        load_settings(preset="fast", overrides=["vad.enabled=false"])
 
 
 def test_mode_table_is_pinned():
@@ -119,10 +119,10 @@ def test_pinned_library_version():
 
 
 def test_mode_issues_only_for_explicit_values():
-    assert mode_issues(load_settings(preset="fast-draft")) == []
+    assert mode_issues(load_settings(preset="fast")) == []
     assert mode_issues(load_settings()) == []
     s = load_settings(
-        preset="fast-draft",
+        preset="fast",
         overrides=[
             "decoding.condition_on_previous_text=true",
             "decoding.temperature=[0.0, 0.5]",
