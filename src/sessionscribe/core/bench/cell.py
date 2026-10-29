@@ -49,7 +49,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "compute_type": args.compute_type,
                     "num_workers": args.workers,
                 },
-                "asr": {"mode": args.mode, "batch_size": args.batch_size},
+                # Fixed batch sizes: an OOM must show as a failed cell, not a quiet fallback.
+                "asr": {"mode": args.mode, "batch_size": args.batch_size, "oom_fallback": False},
                 "decoding": {"language": language, "word_timestamps": args.word_timestamps},
             },
         )

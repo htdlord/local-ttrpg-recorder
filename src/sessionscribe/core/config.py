@@ -42,8 +42,8 @@ ASR_MODES: tuple[str, ...] = ("quality", "fast")
 #   report_only  - not used for decisions by the library; our own post-checks still use it
 ModeSupport = Literal["honoured", "ignored", "first_only", "report_only"]
 
-# Batch sizes tried in fast mode when batch_size is not set; halves on GPU OOM (SPEC §3.2).
-FAST_BATCH_SIZES: tuple[int, ...] = (16, 8, 4, 2, 1)
+# Fast mode starts at batch_size (default 16) and halves on GPU OOM down to 1 (SPEC §3.2).
+DEFAULT_FAST_BATCH_SIZE = 16
 
 
 def _modes(quality: ModeSupport, fast: ModeSupport) -> dict[str, Any]:
@@ -70,7 +70,12 @@ class AsrSettings(_Section):
     batch_size: int | None = Field(
         None,
         ge=1,
-        description="Fast mode batch size; default probes 16 -> 8 -> 4 -> 2 -> 1 on OOM.",
+        description="Fast mode starting batch size (default 16); halves on OOM down to 1.",
+        json_schema_extra=_modes("ignored", "honoured"),
+    )
+    oom_fallback: bool = Field(
+        True,
+        description="Fast mode: on GPU OOM retry with half the batch size (for smaller GPUs).",
         json_schema_extra=_modes("ignored", "honoured"),
     )
 

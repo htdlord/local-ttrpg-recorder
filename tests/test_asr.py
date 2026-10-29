@@ -153,12 +153,30 @@ def test_fast_mode_gives_up_with_clear_error():
         engine.transcribe(audio(), source_id="p1")
 
 
-def test_fixed_batch_size_is_not_probed():
+def test_fast_preset_falls_back_from_4():
+    fake = FakeBatched(oom_above=1)
+    result = AsrEngine(load_settings(preset="fast"), object(), LOADED, lambda m: fake).transcribe(
+        audio(), source_id="p1"
+    )
+    assert fake.sizes == [4, 2, 1] and result.batch_size == 1
+
+
+def test_fallback_can_be_switched_off():
     fake = FakeBatched(oom_above=4)
-    s = load_settings(preset="fast", overrides=["asr.batch_size=8"])
-    with pytest.raises(AsrError):
+    s = load_settings(preset="fast", overrides=["asr.batch_size=8", "asr.oom_fallback=false"])
+    with pytest.raises(AsrError, match="OOM fallback is off"):
         AsrEngine(s, object(), LOADED, lambda m: fake).transcribe(audio(), source_id="p1")
     assert fake.sizes == [8]
+
+
+@pytest.mark.parametrize(
+    ("start", "expected"), [(None, (16, 8, 4, 2, 1)), (4, (4, 2, 1)), (6, (6, 3, 1)), (1, (1,))]
+)
+def test_batch_size_sequence(start, expected):
+    from sessionscribe.core.pipeline.asr import batch_sizes
+
+    cli = {"asr": {"mode": "fast", "batch_size": start}} if start else {"asr": {"mode": "fast"}}
+    assert batch_sizes(load_settings(cli=cli)) == expected
 
 
 def test_cancel():
