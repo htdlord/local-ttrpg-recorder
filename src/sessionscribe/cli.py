@@ -7,7 +7,7 @@ import logging
 import math
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -18,6 +18,9 @@ from sessionscribe.core.audio.backend import (
     format_channel_spec,
     parse_channel_spec,
 )
+
+if TYPE_CHECKING:
+    from sessionscribe.core.config import Settings
 
 app = typer.Typer(
     name="sessionscribe",
@@ -257,6 +260,231 @@ def record_probe(
         for reason in report.reasons:
             typer.echo(f"  - {reason}")
     raise typer.Exit(1 if report.verdict is Verdict.FAIL else 0)
+
+
+# --- settings and single-file transcription -----------------------------------------------
+
+config_app = typer.Typer(help="Show, create and validate settings files.", no_args_is_help=True)
+presets_app = typer.Typer(help="Built-in and user presets.", no_args_is_help=True)
+app.add_typer(config_app, name="config")
+app.add_typer(presets_app, name="presets")
+
+PresetOpt = Annotated[
+    str | None, typer.Option("--preset", "-p", help="Preset name (default: conversation).")
+]
+ConfigOpt = Annotated[
+    Path | None, typer.Option("--config", help="Settings TOML file.", exists=True, dir_okay=False)
+]
+SetOpt = Annotated[
+    list[str] | None,
+    typer.Option("--set", help="Override a setting: section.field=value (repeatable)."),
+]
+
+
+def _load_settings(
+    preset: str | None,
+    config_path: Path | None,
+    overrides: list[str] | None,
+    cli: dict[str, Any] | None = None,
+) -> Settings:
+    from pydantic import ValidationError
+
+    from sessionscribe.core.config import DEFAULT_PRESET, load_settings
+
+    try:
+        return load_settings(
+            preset=preset if preset is not None else (None if config_path else DEFAULT_PRESET),
+            config_path=config_path,
+            overrides=overrides or (),
+            cli=cli,
+        )
+    except ValidationError as exc:
+        typer.echo(f"{_badge('FAIL')} invalid settings:", err=True)
+        for err in exc.errors():
+            where = ".".join(str(p) for p in err["loc"]) or "settings"
+            typer.echo(f"  - {where}: {err['msg']}", err=True)
+        raise typer.Exit(2) from exc
+    except (ValueError, OSError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _warn_mode_issues(settings: Settings) -> int:
+    from sessionscribe.core.config import mode_issues
+
+    issues = mode_issues(settings)
+    for issue in issues:
+        typer.echo(f"{_badge('WARN')} {issue.message}", err=True)
+    if settings.decoding.language == "auto":
+        typer.echo(
+            f"{_badge('WARN')} decoding.language is auto; set it (e.g. --language hu) for "
+            "reliable results on short utterances",
+            err=True,
+        )
+    return len(issues)
+
+
+def _cli_settings(**values: Any) -> dict[str, Any]:
+    """Nested settings dict from flat ``section__field`` keyword arguments that are set."""
+    out: dict[str, Any] = {}
+    for key, value in values.items():
+        if value is None:
+            continue
+        section, _, name = key.partition("__")
+        out.setdefault(section, {})[name] = value
+    return out
+
+
+@config_app.command("show")
+def config_show(preset: PresetOpt = None, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Print the resolved settings as TOML."""
+    from sessionscribe.core.config import settings_to_toml
+
+    settings = _load_settings(preset, config, set_)
+    typer.echo(settings_to_toml(settings), nl=False)
+    _warn_mode_issues(settings)
+
+
+@config_app.command("init")
+def config_init(
+    path: Annotated[Path, typer.Argument(help="File to create.")],
+    preset: PresetOpt = None,
+    force: Annotated[bool, typer.Option(help="Overwrite an existing file.")] = False,
+) -> None:
+    """Write a settings file with all values of a preset."""
+    from sessionscribe.core.config import write_settings
+
+    if path.exists() and not force:
+        typer.echo(f"{_badge('FAIL')} {path} exists; use --force to overwrite", err=True)
+        raise typer.Exit(1)
+    write_settings(_load_settings(preset, None, None), path)
+    typer.echo(f"Wrote {path}")
+
+
+@config_app.command("validate")
+def config_validate(
+    path: Annotated[Path, typer.Argument(help="Settings TOML file.", exists=True, dir_okay=False)],
+) -> None:
+    """Validate a settings file and report settings the chosen ASR mode ignores."""
+    settings = _load_settings(None, path, None)
+    warnings = _warn_mode_issues(settings)
+    typer.echo(f"{_badge('WARN' if warnings else 'OK')} {path} (mode {settings.asr.mode})")
+
+
+@presets_app.command("list")
+def presets_list() -> None:
+    """List presets (user presets live in the user config folder)."""
+    from sessionscribe.core.config import list_presets, user_presets_dir
+
+    for name, source in list_presets().items():
+        typer.echo(f"{name:16} {source or 'built-in'}")
+    typer.echo(f"\nUser presets: {user_presets_dir()}")
+
+
+@app.command()
+def transcribe(
+    file: Annotated[Path, typer.Argument(help="Audio file (WAV, FLAC, RF64).", exists=True)],
+    preset: PresetOpt = None,
+    config: ConfigOpt = None,
+    set_: SetOpt = None,
+    model: Annotated[str | None, typer.Option(help="Model name or folder.")] = None,
+    language: Annotated[
+        str | None, typer.Option("--language", "-l", help="hu, en or auto.")
+    ] = None,
+    mode: Annotated[str | None, typer.Option(help="ASR mode: quality or fast.")] = None,
+    device: Annotated[str | None, typer.Option(help="auto, cuda or cpu.")] = None,
+    compute_type: Annotated[str | None, typer.Option(help="ctranslate2 compute type.")] = None,
+    batch_size: Annotated[int | None, typer.Option(help="Fast mode batch size.")] = None,
+    initial_prompt: Annotated[str | None, typer.Option(help="Initial prompt text.")] = None,
+    hotwords: Annotated[str | None, typer.Option(help="Hotwords text.")] = None,
+    model_dir: Annotated[Path | None, typer.Option(help="Model download folder.")] = None,
+    offline: Annotated[bool | None, typer.Option("--offline", help="Cached models only.")] = None,
+    channel: Annotated[
+        int | None, typer.Option(help="1-based channel of a multi-channel file.")
+    ] = None,
+    speaker: Annotated[str | None, typer.Option(help="Speaker id (default: file name).")] = None,
+    name: Annotated[str | None, typer.Option(help="Speaker display name.")] = None,
+    out: Annotated[Path | None, typer.Option(help="Output folder (default: output/).")] = None,
+    formats: Annotated[str | None, typer.Option(help="Comma-separated: json,txt.")] = None,
+    max_duration: Annotated[float, typer.Option(help="Longest accepted file in hours.")] = 2.0,
+) -> None:
+    """Transcribe one audio file (one speaker)."""
+    from sessionscribe.core.audio.reader import AudioReadError, load_for_asr
+    from sessionscribe.core.events import Event, ProgressEvent, WarningEvent
+    from sessionscribe.core.exporters.single import Speaker, write_outputs
+    from sessionscribe.core.pipeline.asr import AsrEngine, AsrError
+
+    settings = _load_settings(
+        preset,
+        config,
+        set_,
+        _cli_settings(
+            model__id=model,
+            model__device=device,
+            model__compute_type=compute_type,
+            model__model_dir=model_dir,
+            model__offline=offline,
+            asr__mode=mode,
+            asr__batch_size=batch_size,
+            decoding__language=language,
+            vocabulary__initial_prompt=initial_prompt,
+            vocabulary__hotwords=hotwords,
+            output__formats=formats.split(",") if formats else None,
+        ),
+    )
+    _warn_mode_issues(settings)
+
+    try:
+        audio, info = load_for_asr(file, channel, max_duration * 3600.0)
+    except AudioReadError as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(
+        f"{file.name}: {info.duration_s:.1f} s, {info.samplerate} Hz, {info.subtype}; "
+        f"model {settings.model.id}, {settings.asr.mode} mode",
+        err=True,
+    )
+
+    last = [-1]
+
+    def sink(event: Event) -> None:
+        if isinstance(event, WarningEvent):
+            typer.echo(f"{_badge('WARN')} {event.message}", err=True)
+        elif isinstance(event, ProgressEvent) and event.total:
+            pct = int(100 * event.done / event.total)
+            if pct // 10 != last[0] // 10:
+                last[0] = pct
+                typer.echo(f"  {pct:3d} %", err=True)
+
+    speaker_id = speaker or file.stem
+    try:
+        engine = AsrEngine.load(settings)
+        typer.echo(
+            f"Model loaded on {engine.loaded.device}/{engine.loaded.compute_type} "
+            f"in {engine.loaded.load_s:.1f} s",
+            err=True,
+        )
+        result = engine.transcribe(audio, source_id=speaker_id, sink=sink)
+    except (AsrError, ValueError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    out_dir = out or settings.output.output_dir or Path("output")
+    who = Speaker(speaker_id, name or speaker_id, file.name)
+    try:
+        written = write_outputs(
+            result, settings, who, out_dir, file.stem, tuple(settings.output.formats)
+        )
+    except ValueError as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(
+        f"{len(result.segments)} segments, language {result.language}, "
+        f"RTF {result.rtf:.3f}" + (f", batch {result.batch_size}" if result.batch_size else ""),
+        err=True,
+    )
+    for path in written:
+        typer.echo(str(path))
 
 
 if __name__ == "__main__":
