@@ -162,6 +162,21 @@ def _default_formats() -> list[ExportFormat]:
     return ["json", "txt"]
 
 
+class QualitySettings(_Section):
+    """Thresholds for quality flags (SPEC §5.6); a flag marks, it never removes."""
+
+    enabled: bool = True
+    low_logprob: float = Field(-1.0, description="Flag avg_logprob below this.")
+    high_no_speech: float = Field(0.6, ge=0, le=1, description="Flag no_speech_prob above this.")
+    high_compression: float = Field(2.4, gt=0, description="Flag compression ratio above this.")
+    repeated_ngram: int = Field(3, ge=1, description="n of the repeated n-gram check.")
+    repeated_ngram_times: int = Field(3, ge=2, description="Occurrences that count as a loop.")
+    max_chars_per_s: float = Field(25.0, gt=0, description="Text too long for voiced time.")
+    min_vad_fraction: float = Field(
+        0.5, ge=0, le=1, description="Flag segments with less of their time in VAD speech."
+    )
+
+
 class OutputSettings(_Section):
     formats: list[ExportFormat] = Field(default_factory=_default_formats, min_length=1)
     timestamp_style: Literal["hh:mm:ss", "hh:mm:ss.mmm"] = "hh:mm:ss"
@@ -187,6 +202,7 @@ class Settings(_Section):
     vad: VadSettings = Field(default_factory=VadSettings)
     bleed: BleedSettings = Field(default_factory=BleedSettings)
     dedup: DedupSettings = Field(default_factory=DedupSettings)
+    quality: QualitySettings = Field(default_factory=QualitySettings)
     output: OutputSettings = Field(default_factory=OutputSettings)
 
     @model_validator(mode="after")
