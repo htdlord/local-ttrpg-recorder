@@ -62,6 +62,8 @@ def make_report(engine: ProbeEngine, channels, frames_written=None) -> ProbeRepo
     report = ProbeReport(
         device="fake",
         host_api="ASIO",
+        device_index=0,
+        device_auto_selected=False,
         channels=list(channels),
         samplerate=RATE,
         actual_samplerate=float(RATE),
@@ -86,8 +88,11 @@ def make_report(engine: ProbeEngine, channels, frames_written=None) -> ProbeRepo
         writer_max_write_s=0.0,
         timestamps_available=engine.timestamps.seen > 0,
         timestamp_discontinuities=engine.timestamps.discontinuities,
-        timestamp_max_deviation_ms=engine.timestamps.max_deviation_s * 1000,
+        timestamp_jitter_median_ms=None,
+        timestamp_jitter_p99_ms=None,
+        timestamp_jitter_max_ms=None,
         missing_timestamps=engine.timestamps.missing,
+        timestamp_queue_dropped=engine.timestamp_queue.dropped_blocks,
         clock_deviation_ppm=engine.clock_deviation_ppm(),
         levels=engine.levels(tuple(channels)),
     )
@@ -173,23 +178,60 @@ def test_lost_block_is_a_timestamp_discontinuity():
     assert report.verdict is Verdict.FAIL
 
 
-def test_timestamp_jitter_and_drift_tolerated():
-    jitter = np.random.default_rng(1).uniform(-0.004, 0.004, 3000)  # ±4 ms on 10 ms blocks
+def run_monitor(blocks, *, block=BLOCK, jitter_s=0.0, drift_ppm=0.0, lost_at=(), offsets=None):
+    """Feed a TimestampMonitor; ``lost_at`` block indices are preceded by one lost block."""
+    rng = np.random.default_rng(1)
     mon = TimestampMonitor(RATE)
     adc = 1.0
-    for j in jitter:
-        mon.update(adc + j, BLOCK)
-        adc += BLOCK / RATE * (1 + 500e-6)  # 500 ppm clock drift
-    assert mon.discontinuities == 0
+    for b in range(blocks):
+        if b in lost_at:
+            adc += block / RATE * (1 + drift_ppm * 1e-6)
+        extra = offsets(b) if offsets else 0.0
+        mon.update(adc + rng.uniform(-jitter_s, jitter_s) + extra, block)
+        adc += block / RATE * (1 + drift_ppm * 1e-6)
+    return mon
+
+
+def test_single_lost_block_is_detected():
+    # 10 ms blocks: one lost block is exactly 2x the half-block threshold.
+    assert run_monitor(500, lost_at={250}).discontinuities == 1
+
+
+def test_single_lost_block_is_detected_under_jitter_and_drift():
+    mon = run_monitor(3000, jitter_s=0.004, drift_ppm=500, lost_at={1500})
+    assert mon.discontinuities == 1
+
+
+def test_single_lost_block_with_large_asio_blocks():
+    assert run_monitor(300, block=2048, jitter_s=0.002, lost_at={150}).discontinuities == 1
+
+
+def test_several_lost_blocks_are_counted_separately():
+    assert run_monitor(1000, jitter_s=0.002, lost_at={200, 600}).discontinuities == 2
+
+
+def test_jitter_and_drift_alone_are_tolerated():
+    # ±4 ms on 10 ms blocks with 500 ppm clock drift.
+    assert run_monitor(3000, jitter_s=0.004, drift_ppm=500).discontinuities == 0
 
 
 def test_single_late_timestamp_is_not_a_discontinuity():
-    mon = TimestampMonitor(RATE)
-    adc = 1.0
-    for b in range(300):
-        mon.update(adc + (0.03 if b == 150 else 0.0), BLOCK)
-        adc += BLOCK / RATE
+    mon = run_monitor(300, offsets=lambda b: 0.03 if b == 150 else 0.0)
     assert mon.discontinuities == 0
+
+
+def test_shift_shorter_than_100_ms_is_not_a_discontinuity():
+    # 8 blocks (80 ms) of late stamps, then back on track.
+    mon = run_monitor(300, offsets=lambda b: 0.01 if 100 <= b < 108 else 0.0)
+    assert mon.discontinuities == 0
+
+
+def test_jitter_statistics():
+    stats = run_monitor(2000, jitter_s=0.002).jitter_stats()
+    assert stats is not None
+    assert 0.0005 < stats.median_s < 0.0015  # median |uniform(±2 ms)| is 1 ms
+    assert stats.median_s < stats.p99_s <= stats.max_s <= 0.0045
+    assert TimestampMonitor(RATE).jitter_stats() is None
 
 
 def test_missing_timestamps_warn():
