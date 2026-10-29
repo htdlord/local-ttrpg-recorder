@@ -6,6 +6,11 @@ References are made from real recordings, so **they are personal data**: they li
 the git-ignored `bench/refs/` folder and must never be committed, pasted into issues or
 logged. The `bench` commands print counts, ids and numbers only.
 
+> **Status (2026-10-30):** the verbatim workflow below works, but hand-correcting text is
+> a later feature (SPEC §14). For M3, a lighter *triage reference* is used instead: every
+> segment is labelled by ear as speech, bleed or wrong speaker, with no text correction
+> (`bench ref triage`, planned; see DECISIONS 2026-10-30).
+
 ## Clip folder
 
 ```
