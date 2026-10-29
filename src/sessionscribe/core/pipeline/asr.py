@@ -15,7 +15,12 @@ from typing import Any
 
 import numpy as np
 
-from sessionscribe.core.config import FAST_BATCH_SIZES, Settings, VadSettings, resolve_runtime
+from sessionscribe.core.config import (
+    DEFAULT_FAST_BATCH_SIZE,
+    Settings,
+    VadSettings,
+    resolve_runtime,
+)
 from sessionscribe.core.events import (
     EventSink,
     ProgressEvent,
@@ -221,9 +226,14 @@ def transcribe_kwargs(settings: Settings) -> dict[str, Any]:
 
 
 def batch_sizes(settings: Settings) -> tuple[int, ...]:
-    if settings.asr.batch_size is not None:
-        return (settings.asr.batch_size,)
-    return FAST_BATCH_SIZES
+    """Starting batch size, then halved down to 1 unless the OOM fallback is off."""
+    size = settings.asr.batch_size or DEFAULT_FAST_BATCH_SIZE
+    if not settings.asr.oom_fallback:
+        return (size,)
+    sizes = [size]
+    while sizes[-1] > 1:
+        sizes.append(sizes[-1] // 2)
+    return tuple(sizes)
 
 
 def is_out_of_memory(exc: BaseException) -> bool:
@@ -343,8 +353,10 @@ class AsrEngine:
                         )
                         continue
                     if is_out_of_memory(exc):
+                        how = "even at" if len(sizes) > 1 or size == 1 else "at"
+                        hint = "" if settings.asr.oom_fallback else " (OOM fallback is off)"
                         raise AsrError(
-                            f"out of GPU memory even at batch size {size}; "
+                            f"out of GPU memory {how} batch size {size}{hint}; "
                             "use a smaller model or compute type, or quality mode"
                         ) from exc
                     raise

@@ -101,6 +101,7 @@ def test_mode_table_is_pinned():
     # Behaviour of faster-whisper 1.2.1 (see test_asr_regression.py); update both together.
     assert mode_table() == {
         "asr.batch_size": {"quality": "ignored", "fast": "honoured"},
+        "asr.oom_fallback": {"quality": "ignored", "fast": "honoured"},
         "decoding.best_of": {"quality": "honoured", "fast": "ignored"},
         "decoding.temperature": {"quality": "honoured", "fast": "first_only"},
         "decoding.condition_on_previous_text": {"quality": "honoured", "fast": "ignored"},
