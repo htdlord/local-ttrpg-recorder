@@ -55,6 +55,10 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
+filterwarnings = [
+    # sounddevice 0.5.6 sets ndarray.shape (deprecated in numpy 2.5); upstream issue.
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:sounddevice",
+]
 markers = [
     "gpu: needs a CUDA GPU (local only)",
     "slow: loads a real model or runs long (local only)",
