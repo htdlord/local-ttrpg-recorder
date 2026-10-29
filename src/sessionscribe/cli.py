@@ -487,5 +487,10 @@ def transcribe(
         typer.echo(str(path))
 
 
+from sessionscribe.cli_bench import bench_app  # noqa: E402
+
+app.add_typer(bench_app, name="bench")
+
+
 if __name__ == "__main__":
     app()
