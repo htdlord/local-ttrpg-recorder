@@ -65,7 +65,7 @@ Two inference modes, because they do not honour the same parameters:
 | `condition_on_previous_text` | configurable (default `False`) | not applicable |
 | `hallucination_silence_threshold` | supported (needs word timestamps) | not applied (verify) |
 | `log_prob` / `compression_ratio` thresholds | drive retries | reported only; our own post-checks use them |
-| `batch_size` | – | auto-probed: 16 → 8 → 4 → 2 → 1 on OOM, then fail with a clear error |
+| `batch_size` | – | starting size (default 16; `fast` preset 4), halved on OOM down to 1, then a clear error; `oom_fallback=false` keeps it fixed (benchmarks) |
 
 Each setting declares which modes it applies to; the GUI disables (with tooltip) settings that the selected mode ignores, and the CLI warns. A regression test pins this behaviour against the locked faster-whisper version.
 
