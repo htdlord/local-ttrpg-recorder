@@ -50,8 +50,10 @@ src/sessionscribe/
     config.py          # settings, presets, schema_version + migrations, mode-aware param metadata
     timeline.py        # integer-sample session timeline, offsets, conversions
     audio/             # readers (incl. segmented virtual tracks), recorder, ring buffer
-    pipeline/          # stages: features, coupling, ownership, vad, asr, attribution
+    session.py         # session.toml: participants, sources, offsets
+    pipeline/          # stages: features, chunks, asr + worker process, run; later coupling, ownership, attribution
     merge.py           # sort, dedup (evidence-based), overlap marking
+    result.py          # SessionResult handed to exporters
     quality.py         # quality flags
     exporters/         # txt, srt, vtt, json, md
     events.py          # AudioBlock, SegmentEvent(provisional|final), progress/warning/error

@@ -119,6 +119,8 @@ See §6.2 for the algorithm.
 - `formats`: `txt`, `srt`, `vtt`, `json`, `md`.
 - `timestamp_style` for txt/md: `hh:mm:ss` | `hh:mm:ss.mmm`. SRT/VTT always use their own millisecond formats.
 - `merge_same_speaker_gap_s` (txt/md only), filename template.
+- Session file `session.toml`: `name`, `date`, optional `preset` and `[settings]` (layered after `--config`), `[[participants]]` with `id`, `name`, `source` (file or folder of segment files, relative to the session), `channel`, `offset_s` (≥ 0), `color`. `session init FOLDER` suggests one from file names.
+- Chunking (`asr.chunk_owned_s` 600, `asr.chunk_context_s` 5, `asr.chunk_boundary_search_s` 15) and quality-flag thresholds (`[quality]`) are settings; see §5.1 and §5.6.
 
 ## 4. Time model
 
@@ -139,7 +141,8 @@ Track readers (raw, untouched) ─► energy envelopes ─► coupling estimate 
 ### 5.1 Chunking
 
 - Chunks are defined in **track-local** time: an **owned range** (default 10 min) plus **context** on both sides (default 5 s). ASR sees owned + context; only segments whose midpoint lies in the owned range are kept. Words straddling the boundary are resolved by word timestamps; boundary behaviour has dedicated tests.
-- Owned-range boundaries are nudged to a nearby low-energy point (deterministic: same input → same boundaries).
+- Owned-range boundaries are nudged to a nearby low-energy point (deterministic: same input → same boundaries): the quietest 0.5 s-smoothed point within ±`chunk_boundary_search_s`.
+- Words of a kept segment that lie past the owned range are dropped only when the neighbouring chunk's own words cover them; a segment duplicated entirely goes to `suppressed` (`chunk_boundary_duplicate`).
 - Track-local chunking means changing an offset never invalidates ASR results in `post` mode.
 - Memory budget: at most one chunk of all tracks in RAM at once.
 
@@ -178,7 +181,7 @@ Cross-correlation / spectral similarity between tracks may be explored in M3 as 
 
 ### 5.6 Quality flags
 
-Segments are flagged (not deleted) when: low `avg_logprob`; high `no_speech_prob`; high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap. Flags appear in JSON, in md as a marker, and in the GUI review list.
+Segments are flagged (not deleted) when: low `avg_logprob`; high `no_speech_prob` together with a lowish `avg_logprob` (both are per 30 s decoding window); high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap. Flags appear in JSON, in md as a marker, and in the GUI review list.
 
 ### 5.7 Cache
 
@@ -191,7 +194,7 @@ Layered, each layer with its own key; files written atomically (temp file + rena
 | `asr` | file fingerprint, track-local chunk + context range, model id + revision, compute type, ASR mode + params, VAD params, faster-whisper/ctranslate2 versions, `processing_version`; in `pre` mode also the ownership key | model/ASR/VAD change (and bleed params in pre mode) |
 | merge / export | not cached (cheap) | – |
 
-File fingerprint: size + mtime + hash of first/last MB (fast), full hash optional.
+File fingerprint: size + hash of the first and last MB of each file a range touches (no mtime, so copying a session folder keeps its cache); full hash optional (`--full-hash`).
 
 **Crashing workers.** ASR runs in child processes. An unexpected child exit (non-zero exit code, e.g. Windows 0xC0000005, a signal, or a missing result) fails only that chunk: completed chunks stay valid in the cache, partial files of the failed chunk are discarded, and the chunk is re-run **once**. A second failure stops processing with a clear error: track, chunk range, decoded exit code, likely cause and a hint. The cache stays consistent, so a later run resumes after the completed chunks. Crashes and retries are recorded in the log and in `processing_events` in the JSON output.
 
@@ -217,7 +220,10 @@ File fingerprint: size + mtime + hash of first/last MB (fast), full hash optiona
       "words": [ { "start": 12.34, "end": 12.61, "word": "…", "prob": 0.97 } ]
     }
   ],
-  "suppressed": [ /* same shape + "suppression_reason": "bleed"|"duplicate", "duplicate_of" */ ]
+  "suppressed": [ /* same shape + "suppression_reason": "bleed"|"duplicate"|"chunk_boundary_duplicate", "duplicate_of" */ ],
+  // also: "bleed_mode_applied", "chunks" (owned/context ranges, cache key, cached),
+  // "vad_intervals" per participant, "processing_events" (worker crashes, retries, warnings);
+  // per segment "boundary_trimmed_words". audio_start_sample is track-local, start/end session time.
 }
 ```
 

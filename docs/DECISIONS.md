@@ -260,3 +260,64 @@ Built at the start of M3, before any M3 measurement. M3 acceptance needs complet
 - [x] ~~Re-score M1 with a verified verbatim reference before merging PR #2.~~ Dropped: verbatim reference moved to SPEC §14, and PR #2 was merged on the unverified reference (above).
 - [ ] Repeat the M1 benchmark (incl. `parallel`) with a ≥ 5 min clip (SPEC §11.1) and confirm the quality-vs-fast WER ranking. Required before the M3 tolerances are fixed.
 - [ ] Triage reference (`bench ref triage`) and complete triage of clip01 and the ≥ 5 min clip(s): M3 prerequisite.
+
+## 2026-10-30 – M2 implementation decisions
+
+- **Session file:** `session.toml` holds participants (id, name, source file or segment folder, channel, offset, colour), an optional preset and an optional `[settings]` table.
+  - The settings layers are: preset → `--config` → session `[settings]` → `--set` → CLI flags. An explicit `--preset` beats the session's preset, which beats the config file's.
+  - `session init FOLDER` suggests participants from `chNN_name` file names or segment subfolders. Ids are ASCII (`Ádám` → `Adam`), and display names keep the original spelling.
+- **`offset_s ≥ 0`:** offsets can always be chosen so the earliest track starts at 0, and this keeps the session timeline non-negative.
+- **Fingerprint without mtime (owner request):** size plus SHA-256 of the first and last MB of each file a range touches, plus the file's position in the virtual track.
+  - Copying or moving a session folder keeps its cache valid.
+  - Risk: an edit in the middle of a file that keeps its size goes unnoticed. `--full-hash` hashes whole files. Raw audio is never modified by the app, so this risk is accepted.
+- **Features in fixed blocks:** energy envelopes (20 ms dBFS) are cached in nominal 10 min blocks of the file, independent of chunk boundaries, so boundary placement does not invalidate features. This avoids a circular dependency.
+- **Chunk plan:**
+  - The owned range is 600 s and the context 5 s.
+  - Each nominal boundary moves to the quietest 0.5 s-smoothed point within ±15 s (at most a quarter of the owned range); on ties the earliest point wins.
+  - A last chunk shorter than a quarter of the owned range is merged into the previous one.
+  - A track shorter than the owned range is one chunk, and its output is identical to M1 single-file output (verified on clip01: all 7 tracks segment-for-segment identical).
+- **Boundary rule:**
+  - Segments are kept by midpoint.
+  - A kept segment's words past the owned range are dropped only if the neighbouring chunk's own (inside) words cover at least 50 % of each such word.
+  - A segment whose every word is covered goes to `suppressed` with `suppression_reason = "chunk_boundary_duplicate"`, so nothing disappears without a trace.
+  - `boundary_trimmed_words` counts what was trimmed.
+- **ASR cache key:**
+  - track fingerprint and sample rate, context range;
+  - model id, revision, device, compute type;
+  - mode and the batch size (fast mode only);
+  - the decoding parameters the mode honours, VAD settings, library versions and `processing_version`.
+  - Participant id, name and offset, as well as the output, quality and bleed settings, are **not** in the key, so renaming, offset changes and re-export never re-run ASR (tested with 8 synthetic tracks).
+- **Stable segment ids:** `{participant}-c{chunk:03d}-{raw ASR index:04d}`. The index is the position in the chunk's raw ASR output, so filtering never shifts ids.
+- **One long-lived worker process** (spawn) holds the model and reads chunk audio itself. Parallel tracks are not used (M1: about 8 % gain).
+  - The crash handling follows the M2 task above. Exit codes are decoded, including signed and unsigned NTSTATUS and POSIX signals.
+  - `InlineRunner` exists for tests and debugging.
+- **`audio_start_sample` is track-local** (48 kHz timeline samples from the start of that participant's source), so a passage can be found in the original file whatever the offset. `start`/`end` are session time.
+- **`export` and the work folder:**
+  - `transcribe` stores its resolved settings in `<work>/last_settings.json`.
+  - `export` takes the ASR sections (model, asr, decoding, vocabulary, vad) from there and resolves the rest afresh, so a language given only on the transcribe command line still finds the cache.
+  - The work folder defaults to `<session folder>/work/`. It contains transcript text, and `clean` deletes it.
+- **M2 bleed handling:** none yet. The JSON says `bleed_mode_applied: "off"`, and the CLI says so once per run.
+- **Quality flags calibrated on clip01:**
+  - `no_speech_prob` and `avg_logprob` are per 30 s decoding window, shared by every segment in it. A no-speech flag alone marked a third of all segments, so it now also needs `avg_logprob < -0.5`.
+  - `too_long_for_duration` uses 35 chars/s, counting at least 1 s: Hungarian words with tight word timestamps reached 25–30 chars/s.
+  - Result on clip01: 0 of 69 segments flagged.
+- **`exporters/single.py` stays** for the bench's single-track tools (`ref draft`, matrix cells). `transcribe FILE` now goes through the session pipeline as a one-participant session.
+
+## 2026-10-30 – M2 measurement: chunk boundaries on clip01 (needs a decision)
+
+`bench run --matrix chunking` measured large-v3 float16 quality on clip01 against the draft reference (WER informational only):
+
+| owned range | WER % | recall % | VAD speech without any word (holes ≥ 1.5 s) |
+|---|---|---|---|
+| whole track (= default 600 s on this clip) | 21.9 | 86.7 | 25.5 s of 202.5 s, 10 holes |
+| 60 s | 26.0 | 83.3 | 29.4 s, 12 holes |
+| 30 s | 31.9 | 81.7 | 39.5 s, 11 holes |
+
+- **Cause:** not the boundary logic; the kept, trimmed and suppressed words are correct. Whisper in quality mode sometimes skips speech after a window start. VAD marks the stretch as speech, but decoding starts 3–14 s later.
+  - Short chunks start many more windows, so they lose more.
+  - Longer context does not fix it reliably: 5/10/15/30 s of context gave 0.1/4.0/8.2/0.4 word-seconds in the 15 s after one boundary, against 6.9 unchunked.
+- **The same dropout exists without chunking:** 12 % of VAD speech on clip01 has no word at all. Some of it may be bleed or laughter, and the triage reference will tell.
+- **At the default 600 s owned range** boundaries are 20× sparser than in the 30 s cell. The extra loss is estimated at about 2 s per boundary, under 1 % of speech.
+- **Proposed remedy (not implemented, owner decision):** after a chunk's ASR, re-transcribe every VAD speech stretch of at least 1.5 s that got no words, as its own short window with a little padding.
+  - Insert the result flagged `refilled`, and cache it with the chunk.
+  - This addresses dropout everywhere, not only at boundaries. The cost is extra ASR on the uncovered share (about 12 % here).
