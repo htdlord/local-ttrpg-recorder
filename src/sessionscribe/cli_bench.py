@@ -17,7 +17,7 @@ bench_app = typer.Typer(
 )
 clip_app = typer.Typer(help="Reference clip folders.", no_args_is_help=True)
 ref_app = typer.Typer(
-    help="Build a hand-corrected reference transcript (Audacity round-trip).",
+    help="Reference transcripts: triage labels (M3) or verbatim text (Audacity round-trip).",
     no_args_is_help=True,
 )
 bench_app.add_typer(clip_app, name="clip")
@@ -279,6 +279,151 @@ def ref_check(
         f"[ OK ] {clip.reference_path} ({reference.status}): {len(reference.utterances)} "
         f"utterances, {len(reference.excluded)} excluded"
     )
+
+
+def _triage_progress():  # -> EventSink
+    from sessionscribe.core.events import ProgressEvent
+
+    last = [-1]
+
+    def sink(event) -> None:
+        if isinstance(event, ProgressEvent) and event.stage == "asr" and event.total:
+            pct = int(100 * event.done / event.total)
+            if pct // 10 != last[0] // 10:
+                last[0] = pct
+                typer.echo(f"  ASR {pct:3d} %", err=True)
+
+    return sink
+
+
+def _print_triage_stats(triage) -> None:
+    from sessionscribe.core.bench.triage import triage_stats
+
+    st = triage_stats(triage)
+    labels = ", ".join(f"{k} {v}" for k, v in st.labels.items() if v)
+    typer.echo(
+        f"{st.labelled}/{st.units} labelled ({triage.status}); {labels or 'no labels yet'}; "
+        f"suggestions {st.suggested}, accepted {st.accepted}"
+        + (f"; {st.mean_decide_s:.1f} s per unit" if st.mean_decide_s is not None else "")
+    )
+
+
+@ref_app.command("triage")
+def ref_triage(
+    folder: ClipArg,
+    rebuild: Annotated[
+        bool, typer.Option(help="Regenerate units (keeps labels that still match).")
+    ] = False,
+    start: Annotated[int | None, typer.Option("--from", help="Start at unit number N.")] = None,
+    only: Annotated[
+        str | None,
+        typer.Option(help="unlabelled (default), all, suggested, or a speaker id."),
+    ] = None,
+    export: Annotated[Path | None, typer.Option("--export", help="Write a CSV and exit.")] = None,
+    import_: Annotated[
+        Path | None, typer.Option("--import", help="Read labels from a CSV and exit.", exists=True)
+    ] = None,
+    stats: Annotated[bool, typer.Option(help="Print label statistics and exit.")] = False,
+    play: Annotated[bool, typer.Option(help="Play audio while labelling.")] = True,
+) -> None:
+    """Label each segment by ear: own speech, bleed, wrong speaker, mixed, overlap, ...
+
+    The first run transcribes the clip with bleed handling off (cached in the clip's
+    work folder). Labels are saved after every key in triage.json.
+    """
+    from sessionscribe.core.bench import triage as t
+    from sessionscribe.core.pipeline.asr import AsrError
+    from sessionscribe.triage_cli import (
+        AudioSource,
+        Player,
+        TerminalError,
+        require_tty,
+        run_labelling,
+    )
+
+    clip = _load_clip(folder)
+    path = t.triage_path(clip)
+    old = None
+    if path.is_file():
+        try:
+            old = t.read_triage(path)
+        except (OSError, ValueError) as exc:
+            raise _fail(f"cannot read {path}: {exc}") from exc
+
+    if old is not None and not rebuild and (stats or export):
+        if export:
+            t.write_csv(export, old)
+            typer.echo(f"Wrote {export} ({len(old.units)} units)")
+        if stats:
+            _print_triage_stats(old)
+        return
+    if old is not None and not rebuild and import_:
+        updated, problems = t.apply_csv(old, import_.read_text(encoding="utf-8"))
+        for p in problems:
+            typer.echo(f"[WARN] {p}", err=True)
+        t.write_triage(path, old)
+        typer.echo(f"{updated} labels imported")
+        _print_triage_stats(old)
+        return
+
+    texts: dict[str, str] = {}
+    try:
+        if old is None or rebuild:
+            typer.echo(f"{clip.config.id}: transcribing with bleed handling off (cached)", err=True)
+            session, result = t.clip_result(clip, sink=_triage_progress())
+            triage = t.new_triage(clip, session, result)
+            if old is not None:
+                lost = t.carry_labels(old.units, triage.units)
+                kept = sum(u.label is not None for u in triage.units)
+                typer.echo(f"Rebuilt: {len(triage.units)} units, {kept} labels carried over")
+                if lost:
+                    typer.echo(
+                        f"[WARN] {len(lost)} labelled unit(s) no longer match: "
+                        + ", ".join(u.id for u in lost[:10])
+                        + (" ..." if len(lost) > 10 else ""),
+                        err=True,
+                    )
+            t.write_triage(path, triage)
+        else:
+            triage = old
+            try:
+                session, result = t.clip_result(clip, transcribe=False)
+            except AsrError as exc:
+                typer.echo(f"[WARN] {exc}; showing units without text (try --rebuild)", err=True)
+                session, result = t.clip_session(clip), None
+        if result is not None:
+            texts = t.texts_by_id(result)
+            stale = sum(u.kind == "segment" and u.id not in texts for u in triage.units)
+            if stale:
+                typer.echo(
+                    f"[WARN] {stale} unit(s) are not in the current output; consider --rebuild",
+                    err=True,
+                )
+    except (AsrError, OSError, ValueError) as exc:
+        raise _fail(str(exc)) from exc
+
+    if import_:
+        updated, problems = t.apply_csv(triage, import_.read_text(encoding="utf-8"))
+        for p in problems:
+            typer.echo(f"[WARN] {p}", err=True)
+        t.write_triage(path, triage)
+        typer.echo(f"{updated} labels imported")
+    if export:
+        t.write_csv(export, triage)
+        typer.echo(f"Wrote {export} ({len(triage.units)} units)")
+    if stats or import_:
+        _print_triage_stats(triage)
+    if export or stats or import_:
+        return
+    try:
+        require_tty()
+    except TerminalError as exc:
+        raise _fail(str(exc)) from exc
+    names = {p.id: p.display_name for p in session.participants}
+    labeller = t.Labeller(triage, t.visit_order(triage, only, start))
+    run_labelling(triage, path, labeller, AudioSource(session), texts, names, player=Player(play))
+    _print_triage_stats(triage)
+    typer.echo(f"Saved {path}")
 
 
 RefsOpt = Annotated[
