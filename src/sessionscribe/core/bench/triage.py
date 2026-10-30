@@ -34,6 +34,7 @@ from sessionscribe.core.bench.text import normalize
 from sessionscribe.core.config import Settings, load_settings
 from sessionscribe.core.fileio import atomic_write_json, atomic_write_text
 from sessionscribe.core.merge import TranscriptSegment
+from sessionscribe.core.pipeline.coupling import speech_level
 from sessionscribe.core.pipeline.features import SILENCE_DB, track_envelope
 from sessionscribe.core.result import SessionResult
 from sessionscribe.core.session import Participant, Session, SessionConfig
@@ -60,7 +61,6 @@ BLEED_DB = 6.0  # another track this much louder (relative) suggests bleed
 OWN_DB = 6.0  # own track this much louder suggests own speech
 SPEAKING_REL = -10.0  # both tracks this close to their speech level: both speak
 QUIET_REL = -25.0  # a missed-speech stretch this far below own speech: no speech
-ACTIVE_DB = -60.0  # frames above this count when estimating a track's speech level
 SIMILAR = 80.0
 DIFFERENT = 50.0
 NEAR_S = 1.0  # other-track segments this close in time are compared by text
@@ -199,14 +199,6 @@ def best_similarity(
         if score > best[0]:
             best = (score, o.speaker)
     return best
-
-
-def speech_level(env: np.ndarray) -> float:
-    """A track's typical own-speech level: 95th percentile of its active frames."""
-    active = env[env > ACTIVE_DB]
-    if active.size == 0:
-        return float(env.max()) if env.size else SILENCE_DB
-    return float(np.percentile(active, 95))
 
 
 def relative_envelopes(envelopes: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:

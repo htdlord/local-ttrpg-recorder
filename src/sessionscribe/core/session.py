@@ -53,6 +53,11 @@ class SessionConfig(BaseModel):
         default_factory=dict, description="Settings overrides, layered after --config."
     )
     participants: list[Participant] = Field(min_length=1, max_length=MAX_PARTICIPANTS)
+    # Bleed handling (SPEC §5.2): guided coupling from a mic check (participant ->
+    # [start_s, end_s] of session time where only they speak), or a manual matrix in
+    # participant order (C[i][j] dB: j's voice on mic i relative to mic j).
+    mic_check: dict[str, tuple[float, float]] = Field(default_factory=dict)
+    coupling_db: list[list[float]] | None = None
 
     @model_validator(mode="after")
     def _check(self) -> SessionConfig:
@@ -64,6 +69,15 @@ class SessionConfig(BaseModel):
                 raise ValueError(f"participant id {pid!r}: use letters, digits, _ and -")
         if len(set(ids)) != len(ids):
             raise ValueError("participant ids must be unique")
+        for pid, (start, end) in self.mic_check.items():
+            if pid not in ids:
+                raise ValueError(f"mic_check names unknown participant {pid!r}")
+            if not 0 <= start < end:
+                raise ValueError(f"mic_check range of {pid!r} must satisfy 0 <= start < end")
+        if self.coupling_db is not None and (
+            len(self.coupling_db) != len(ids) or any(len(r) != len(ids) for r in self.coupling_db)
+        ):
+            raise ValueError(f"coupling_db must be a {len(ids)} x {len(ids)} matrix")
         return self
 
 
