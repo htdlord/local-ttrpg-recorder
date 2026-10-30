@@ -58,6 +58,8 @@ class TranscriptSegment:
     trimmed_words: int = 0
     suppression_reason: str | None = None
     duplicate_of: str | None = None
+    bleed_source: str | None = None  # participant whose voice this probably is (bleed)
+    probable_speaker: str | None = None  # possible_wrong_speaker: who probably said it
 
 
 @dataclass
