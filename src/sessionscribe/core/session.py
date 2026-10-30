@@ -46,6 +46,15 @@ class Participant(BaseModel):
         return seconds_to_samples(self.offset_s, TIMELINE_RATE)
 
 
+class Reassignment(BaseModel):
+    """A segment moved to another participant by hand (GUI or ``reassign``), no re-ASR."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    segment: str  # stable segment id
+    to: str  # participant id
+
+
 class SessionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -63,6 +72,7 @@ class SessionConfig(BaseModel):
     mic_check: dict[str, tuple[float, float]] = Field(default_factory=dict)
     coupling_db: list[list[float]] | None = None
     recording: RecordingManifest | None = None  # written by the recorder (SPEC §8.2)
+    reassignments: list[Reassignment] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check(self) -> SessionConfig:
@@ -83,7 +93,24 @@ class SessionConfig(BaseModel):
             len(self.coupling_db) != len(ids) or any(len(r) != len(ids) for r in self.coupling_db)
         ):
             raise ValueError(f"coupling_db must be a {len(ids)} x {len(ids)} matrix")
+        seen: set[str] = set()
+        for r in self.reassignments:
+            if r.to not in ids:
+                raise ValueError(
+                    f"reassignment of {r.segment!r} names unknown participant {r.to!r}"
+                )
+            if r.segment in seen:
+                raise ValueError(f"segment {r.segment!r} is reassigned twice")
+            seen.add(r.segment)
         return self
+
+    def reassign(self, segment: str, to: str | None) -> None:
+        """Set (or with ``to=None`` remove) the manual speaker of ``segment``."""
+        self.reassignments = [r for r in self.reassignments if r.segment != segment]
+        if to is not None:
+            if to not in [p.id for p in self.participants]:
+                raise ValueError(f"unknown participant {to!r}")
+            self.reassignments.append(Reassignment(segment=segment, to=to))
 
 
 class Session:

@@ -688,6 +688,32 @@ def export(
 
 
 @app.command()
+def reassign(
+    session_path: Annotated[
+        Path, typer.Option("--session", "-s", help="session.toml (or its folder).", exists=True)
+    ],
+    segment: Annotated[str, typer.Option(help="Segment id, e.g. gm-c003-0007.")],
+    to: Annotated[str | None, typer.Option(help="Participant id to assign it to.")] = None,
+    undo: Annotated[bool, typer.Option(help="Remove the manual assignment.")] = False,
+) -> None:
+    """Move a segment to another participant by hand (no re-ASR); then run export."""
+    from sessionscribe.core.session import write_session
+
+    if (to is None) == (not undo):
+        typer.echo(f"{_badge('FAIL')} give --to PARTICIPANT or --undo", err=True)
+        raise typer.Exit(2)
+    session = _open_session(session_path)
+    try:
+        session.config.reassign(segment, None if undo else to)
+    except ValueError as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(2) from exc
+    write_session(session.folder / "session.toml", session.config)
+    what = "removed" if undo else f"-> {to}"
+    typer.echo(f"{segment} {what}; run 'sessionscribe export --session ...' to update the outputs")
+
+
+@app.command()
 def clean(
     session_path: Annotated[
         Path, typer.Option("--session", "-s", help="session.toml (or its folder).", exists=True)

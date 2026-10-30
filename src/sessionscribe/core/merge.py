@@ -8,7 +8,7 @@ session timeline. Bleed attribution, dedup and overlap marking arrive in M3; the
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from sessionscribe.core.config import QualitySettings
 from sessionscribe.core.pipeline.asr import SpeechInterval, Word
@@ -60,6 +60,7 @@ class TranscriptSegment:
     duplicate_of: str | None = None
     bleed_source: str | None = None  # participant whose voice this probably is (bleed)
     probable_speaker: str | None = None  # possible_wrong_speaker: who probably said it
+    reassigned_from: str | None = None  # speaker before a manual reassignment
 
 
 @dataclass
@@ -143,6 +144,36 @@ def merge_tracks(
     out.suppressed.sort(key=key)
     out.missed.sort(key=key)
     return out
+
+
+REASSIGNED = "reassigned"
+
+
+def apply_reassignments(
+    transcript: Transcript, reassignments: Mapping[str, str], order: Sequence[str]
+) -> tuple[Transcript, list[str]]:
+    """Manual speaker changes by segment id; returns ids that were not found among kept
+    segments (suppressed or no longer produced). Text and timing are untouched."""
+    out: list[TranscriptSegment] = []
+    found: set[str] = set()
+    for seg in transcript.segments:
+        to = reassignments.get(seg.id)
+        if to is None or to == seg.speaker:
+            if to is not None:
+                found.add(seg.id)
+            out.append(seg)
+            continue
+        found.add(seg.id)
+        flags = (
+            seg.quality_flags
+            if REASSIGNED in seg.quality_flags
+            else (*seg.quality_flags, REASSIGNED)
+        )
+        out.append(replace(seg, speaker=to, reassigned_from=seg.speaker, quality_flags=flags))
+    rank = {pid: i for i, pid in enumerate(order)}
+    out.sort(key=lambda s: (s.start, rank.get(s.speaker, len(rank)), s.id))
+    missing = sorted(set(reassignments) - found)
+    return replace(transcript, segments=out), missing
 
 
 def join_same_speaker(
