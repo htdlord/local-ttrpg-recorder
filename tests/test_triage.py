@@ -45,22 +45,32 @@ def levels(own, other):
 
 
 @pytest.mark.parametrize(
-    ("kind", "lv", "sim", "expected"),
+    ("kind", "lv", "sim", "has", "expected"),
     [
-        ("segment", levels(-20, -35), 0, ("s", None)),  # own clearly louder
-        ("segment", levels(-20, -35), 95, ("s", None)),  # ... and the other track echoes it
-        ("segment", levels(-40, -20), 0, ("b", "anna")),  # other louder
-        ("segment", levels(-30, -29), 90, ("b", "bela")),  # same text, other a bit louder
-        ("segment", levels(-25, -26), 10, ("o", None)),  # both speak, different text
-        ("segment", levels(-25, -30), 10, (None, None)),  # in between: a person decides
-        ("missed", levels(-70, -80), 0, ("n", None)),
-        ("missed", levels(-40, -20), 0, ("b", "anna")),
-        ("missed", levels(-30, -32), 0, (None, None)),
-        ("segment", levels(-20, None), 0, ("s", None)),  # single-track clip
+        ("segment", levels(-2, -20), 0, True, ("s", None)),  # own clearly louder (relative)
+        ("segment", levels(-2, -20), 95, True, ("s", None)),  # ... and another track echoes it
+        ("segment", levels(-20, -2), 0, True, ("b", "anna")),  # source louder and has it too
+        ("segment", levels(-20, -2), 0, False, (None, None)),  # louder but no segment there
+        ("segment", levels(-8, -6), 90, True, ("b", "bela")),  # same text, other a bit louder
+        ("segment", levels(-3, -4), 10, True, ("o", None)),  # both speak, different text
+        ("segment", levels(-12, -8), 10, True, (None, None)),  # in between: a person decides
+        ("missed", levels(-30, -40), 0, False, ("n", None)),
+        ("missed", levels(-15, -2), 0, True, ("b", "anna")),
+        ("missed", levels(-5, -8), 0, True, (None, None)),
+        ("segment", levels(-2, None), 0, False, ("s", None)),  # single-track clip
     ],
 )
-def test_suggestion_rules(kind, lv, sim, expected):
-    assert t.suggest(kind, lv, sim, "bela") == expected
+def test_suggestion_rules(kind, lv, sim, has, expected):
+    assert t.suggest(kind, lv, sim, "bela", other_has_segment=has) == expected
+
+
+def test_speech_level_is_relative_to_each_track():
+    quiet_mic = env(10, loud=[(0, 8, -40)])
+    loud_mic = env(10, loud=[(0, 8, -15)])
+    rel = t.relative_envelopes({"a": quiet_mic, "b": loud_mic})
+    assert t.speech_level(quiet_mic) == pytest.approx(-40)
+    assert float(rel["a"][10]) == pytest.approx(0) and float(rel["b"][10]) == pytest.approx(0)
+    assert t.speech_level(env(2)) == -80.0  # silent track: its maximum
 
 
 def test_unit_levels_use_loud_own_frames():
@@ -210,3 +220,19 @@ def test_units_from_the_session_pipeline(tmp_path):
     assert "ő" not in path.read_text(encoding="utf-8")  # no transcript text in the file
     assert t.read_triage(path) == tf
     assert t.texts_by_id(result)[tf.units[0].id].startswith("ő0")
+
+
+def test_mutual_bleed_suggestions_are_dropped():
+    units = [
+        t.TriageUnit(
+            id="a", speaker="gm", start=0, end=2, suggestion="b", suggestion_source="anna"
+        ),
+        t.TriageUnit(
+            id="b", speaker="anna", start=1, end=3, suggestion="b", suggestion_source="gm"
+        ),
+        t.TriageUnit(
+            id="c", speaker="anna", start=5, end=6, suggestion="b", suggestion_source="gm"
+        ),
+    ]
+    assert t.drop_contradictions(units) == 2
+    assert [u.suggestion for u in units] == [None, None, "b"]
