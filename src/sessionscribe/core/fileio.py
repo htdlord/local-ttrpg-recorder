@@ -5,8 +5,25 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
+
+REPLACE_RETRIES = 20
+REPLACE_RETRY_S = 0.05
+
+
+def _replace(tmp: str, path: Path) -> None:
+    """``os.replace``, retried briefly: on Windows it fails while another process has the
+    target open for reading (e.g. a viewer of the manifest during a recording)."""
+    for attempt in range(REPLACE_RETRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == REPLACE_RETRIES - 1:
+                raise
+            time.sleep(REPLACE_RETRY_S)
 
 
 def atomic_write_bytes(path: Path, data: bytes) -> None:
@@ -17,7 +34,7 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise

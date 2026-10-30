@@ -67,10 +67,11 @@ def test_process_kill_then_recover(tmp_path):
     deadline = time.time() + 30
     manifest = folder / "session.toml"
     while time.time() < deadline:
-        if (
-            manifest.is_file()
-            and manifest.read_text(encoding="utf-8").count('status = "closed"') >= 4
-        ):
+        try:
+            text = manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
+        except PermissionError:  # Windows: the child is replacing the file right now
+            text = ""
+        if text.count('status = "closed"') >= 4:
             break
         time.sleep(0.1)
     time.sleep(0.6)  # part of the next segment is on disk (flushed every second)
