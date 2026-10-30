@@ -347,6 +347,7 @@ def _run_session(
                 )
             )
 
+    gaps = list(gaps) or session.gaps()  # the recorder manifest unless given explicitly
     transcript = merge_tracks(tracks, settings.quality, gaps)
     coupling_db: list[list[float]] | None = None
     silent_mics: list[str] = []

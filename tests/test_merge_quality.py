@@ -110,3 +110,9 @@ def test_gap_for_one_participant_only():
     ]
     out = merge_tracks(tracks, QS, [RecordingGap(R, R, "input_overflow", "b")])
     assert {s.speaker: s.quality_flags for s in out.segments} == {"a": (), "b": (q.OVERLAPS_GAP,)}
+
+
+def test_gap_of_unknown_length_still_flags_the_segment_around_it():
+    tracks = [TrackInput("a", 0, [KeptSegment(0, seg(0, 1, 3))], None)]
+    out = merge_tracks(tracks, QS, [RecordingGap(2 * R, 0, "input_overflow")])
+    assert out.segments[0].quality_flags == (q.OVERLAPS_GAP,)

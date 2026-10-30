@@ -41,6 +41,21 @@ uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
 `--no-write` to only count) and reports frame counts, overflows, timestamp continuity,
 clock deviation and per-channel peak/RMS levels.
 
+Record a session (the device is always named; save it once in a rig file):
+
+```bash
+uv run sessionscribe record devices                                   # names, host APIs, channels
+uv run sessionscribe record rig save rig.toml --device "UMC ASIO Driver" --host-api asio     --channels 1-8 --names gm,anna,bela,... --labels "Mesélő,Anna,Béla,..."
+uv run sessionscribe record meters --rig rig.toml                      # identify channels
+uv run sessionscribe record check --rig rig.toml                       # mic check with alarms
+uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05   # Ctrl+C stops
+uv run sessionscribe record verify --session recordings/2026-11-05
+uv run sessionscribe transcribe --session recordings/2026-11-05 -l hu
+```
+
+`record start` begins with a guided mic check (each participant speaks a few seconds);
+its turns are saved for guided coupling. After a crash: `record recover --session ...`.
+
 Transcribe a session (one file or segment folder per participant):
 
 ```bash

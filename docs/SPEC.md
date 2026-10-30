@@ -254,9 +254,12 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
 
 ### 8.2 Files
 
-- **Segmented files:** each channel is written as consecutive, individually closed FLAC files (default 5 min). WAV option uses RF64.
-- Manifest (`session.toml`), updated atomically after every closed segment: per segment start/end sample, frame count, file hash, status (`open`/`closed`/`damaged`).
-- On restart the app verifies segments against the manifest and reports missing/damaged parts. Readers expose a channel's segments as one virtual track.
+- **Segmented files:** each channel is written as consecutive, individually closed FLAC files (default 5 min) under `rec/chNN_<participant>/NNNN.flac`, flushed every second. WAV option uses RF64.
+- Manifest: `[recording]` in `session.toml`, updated atomically after every closed segment, gap, alarm and state change: device, host API, channels, stream settings; per segment start sample, frame count, SHA-256, status (`open`/`closed`/`recovered`/`damaged`); gaps (`start_sample`, `length_samples`, `reason`, `padded`, `estimated`); alarms; metrics.
+- Lost audio never shifts the timeline: ring-buffer drops (exact), ADC timestamp jumps and time without a device (estimated) are filled with silence and recorded as gaps; the gaps reach the transcript (`overlaps_gap`).
+- `record verify` checks the files against the manifest; `record recover` makes `open` segments of a crashed run readable (original kept as `.partial`) and marks the run `interrupted`. Readers expose a channel's segments as one virtual track.
+- Recording profiles: `rig.toml` (device + host API by name, channel → participant, segment length, format); explicit flags override it.
+- While recording: idle-channel warning (an assigned channel at its noise floor for 10 min while others are active), reconnect after an unplug (PortAudio re-initialised to see the device again), sleep blocked (Windows `SetThreadExecutionState`, Linux `systemd-inhibit`).
 - Verify the stream's actual sample format and rate; record them in the manifest (24-bit file ≠ guaranteed 24-bit end-to-end).
 - Before recording, check free space for the planned duration (default 8 h) + 10 % reserve; warn during recording when remaining time drops below 30 min.
 

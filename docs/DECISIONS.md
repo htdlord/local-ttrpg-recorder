@@ -502,3 +502,75 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 - The remaining residue is mostly the strongly coupled GM ↔ `seat_3` pair; margin 9 dB reaches 62 % but loses two speech units.
 - The silent-source residue barely moves: only one pair satisfies the conservative third-party rule.
 - Re-measure on clip02.
+## 2026-10-30 – M5 recorder (CLI first)
+
+- **CLI first** (`sessionscribe record …`), so the next session can already be recorded with it. The M4 GUI Record tab will use the same `core.audio.recorder` API and its events (`LevelEvent`, `RecorderAlarm`, `RecorderStatus`).
+- **Device selection:**
+  - never automatic;
+  - the device is given by name and host API: exactly, or by a unique part of the name, otherwise an error;
+  - **`rig.toml` (owner request)** saves device, host API, channel → participant id/name, segment length, format and the idle-warning time; explicit flags override it;
+  - the device index is only looked up, because it can change between restarts or after an unplug.
+- **Files and manifest:**
+  - each channel is written to `rec/chNN_<participant>/NNNN.flac` (or RF64 `.wav`), so the M2 `VirtualTrack` reads it directly;
+  - the manifest is `[recording]` in `session.toml`: device, stream settings, segments (start sample, frames, SHA-256, status), gaps, alarms and metrics;
+  - it is rewritten atomically after every closed segment, gap, alarm and state change.
+- **Segments are flushed every second**, so a crash or kill loses at most about one second of the open segment.
+- **Lost audio is padded with silence and recorded as a gap; the timeline never shifts.** Real audio is never modified; padding only fills time that has no audio.
+
+  | gap reason | length | how it is detected |
+  |---|---|---|
+  | `buffer_overflow` | exact | ring-buffer drops queued by the callback with their position |
+  | `input_overflow` | estimated | a jump in ADC timestamps, `TimestampMonitor`; no jump: no padding |
+  | `device_lost` | estimated | wall time until the reconnect |
+  | `process_killed` | unknown | resuming an interrupted or stopped session; the gap is only marked |
+
+- **Recording gaps reach the pipeline.** `Session.gaps()` feeds `merge_tracks`, so segments get the `overlaps_gap` flag and the md output lists the gaps.
+- **Watchdog and reconnect:**
+  - no callback for 1 s, or an inactive stream, counts as a lost device: the open segment is closed and an alarm is raised;
+  - with `reconnect` (the default), the recorder tries every 2 s. **Before each try PortAudio is re-initialised** (`sd._terminate()` + `sd._initialize()`, owner request), because PortAudio reads its device list only once; the device is then found again by name and host API;
+  - whether this works under ASIO with the UMC1820 has to be shown by the `audio_hw` test and an unplug test on the reference machine. If it does not, the alarm should advise restarting the recorder.
+- **Disk:**
+  - at start, the planned length (8 h) as uncompressed 24-bit + 10 % must fit;
+  - while recording, a warning below 30 min of remaining time and a clean stop below 2 min.
+- **Idle channel (owner request):** an assigned channel that stays within 10 dB of its noise floor for `idle_warn_min` (10) minutes while another channel is active gets one warning, which is repeated only after the channel has been active again.
+  - The noise floor is the quietest 1 s level seen so far, since conversation always has pauses.
+  - Nothing is reported in the first 2 minutes.
+- **No sleep while recording (owner request):** `SetThreadExecutionState` on Windows (in the recording thread), `systemd-inhibit` on Linux. If neither is available, the CLI warns.
+- **Mic check (owner request: alarms):**
+  - silence for the noise level, then each participant speaks in turn;
+  - all comparisons use a channel's **rise above its own noise**, not absolute levels, because gains differ by 15–20 dB (owner request).
+  - **Alarms** (provisional thresholds):
+
+    | alarm | when | severity |
+    |---|---|---|
+    | `no_signal` | rise < 10 dB during its own turn, or digital silence | FAIL |
+    | `wrong_channel` | another channel rises more during this participant's turn | FAIL |
+    | `quiet` | own speech < −50 dBFS, or its rise > 20 dB below the others' median rise | WARN |
+    | `clipping` | peak ≥ −1 dBFS | WARN |
+
+  - `record start` runs the check **inside the recording**, so its turns are saved as `[mic_check]` ranges in recording time, ready for guided coupling. A FAIL stops the recording unless `--force`.
+  - `record check` runs the same check without writing anything.
+- **Recovery:** `record recover` copies the decodable frames of `open` segments into a clean file of the same name and keeps the original as `.partial`. It cuts the channels of a segment to the same length and marks the run `interrupted`.
+  - `record verify` checks every manifest entry against the disk.
+  - Tested by killing a recorder child process.
+- **Stopping:** Ctrl+C or `--seconds`. There is no separate `q` key, because Ctrl+C already stops cleanly.
+
+- **ASIO only opens from the main thread** (found in the owner's first test): the UMC ASIO driver is a COM object, and `Pa_OpenStream` from a worker thread without COM fails with "Failed to load ASIO driver". The record CLI therefore runs the stream in the main thread (`Recorder.run`, `Meter.run`); mic check prompts and analysis run in a helper thread. Prompts stop on Ctrl+C or when no audio arrives for 3 s; an open error is reported at once (with a hint about another program holding the driver), and no session file is written. The GUI (M4) must do the same: audio on the thread that initialised PortAudio, or COM initialised on its own.
+
+### Hardware results so far (2026-10-30, reference machine, UMC1820 over ASIO)
+
+- 10 s and 2 min 8-channel recordings: 0 gaps, 0 dropped frames, `record verify` OK.
+- PortAudio re-initialisation (the reconnect step) finds the ASIO device again.
+- The mic check opens and alarms correctly on channels nobody speaks into.
+- A physical unplug and a mic check with every participant speaking have not been done yet.
+
+**Owner decision (2026-10-30):** M5 is merged on these results. The tests that need several people or a real session stay open (below); the program does not wait for them. Only wired channels go into the rig: an interface channel that is not in the rig is neither recorded nor checked (on the reference setup channels 2 and 3 are not connected).
+
+### Open tasks (M5, owner)
+
+- [ ] Mic check at the start of a real session, with every participant speaking (`record start --rig rig.toml`).
+- [ ] Record a full session with the recorder, then `record verify`.
+- [ ] Physical unplug: pull the UMC1820 during `record start`, plug it back in, and check that recording continues with a `device_lost` gap.
+- [ ] Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.
+- [x] ~~`pytest -m audio_hw` on ASIO~~: done on 2026-10-30 (2 min recording + verify, device refresh). WASAPI is still open; run it alongside one of the tasks above.
+- [ ] `record check` with one channel deliberately turned down: the `quiet` alarm fires.

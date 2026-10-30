@@ -5,15 +5,19 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from sessionscribe.core.audio.manifest import RecordingManifest
 from sessionscribe.core.audio.track import AUDIO_SUFFIXES, VirtualTrack, audio_files
 from sessionscribe.core.config import read_toml
 from sessionscribe.core.fileio import atomic_write_text
-from sessionscribe.core.timeline import TIMELINE_RATE, seconds_to_samples
+from sessionscribe.core.timeline import TIMELINE_RATE, rescale, seconds_to_samples
+
+if TYPE_CHECKING:
+    from sessionscribe.core.merge import RecordingGap
 
 SESSION_FILE = "session.toml"
 SESSION_SCHEMA_VERSION = 1
@@ -58,6 +62,7 @@ class SessionConfig(BaseModel):
     # participant order (C[i][j] dB: j's voice on mic i relative to mic j).
     mic_check: dict[str, tuple[float, float]] = Field(default_factory=dict)
     coupling_db: list[list[float]] | None = None
+    recording: RecordingManifest | None = None  # written by the recorder (SPEC §8.2)
 
     @model_validator(mode="after")
     def _check(self) -> SessionConfig:
@@ -108,6 +113,24 @@ class Session:
         return VirtualTrack.open(
             self.source_path(participant), participant.channel, full_hash=full_hash
         )
+
+    def gaps(self) -> list[RecordingGap]:
+        """Recording gaps on every track, in track-local timeline samples."""
+        from sessionscribe.core.merge import RecordingGap
+
+        rec = self.config.recording
+        if rec is None:
+            return []
+        out = []
+        for g in rec.gaps:
+            out.append(
+                RecordingGap(
+                    rescale(g.start_sample, rec.samplerate, TIMELINE_RATE),
+                    rescale(g.length_samples, rec.samplerate, TIMELINE_RATE),
+                    g.reason,
+                )
+            )
+        return out
 
     def work_dir(self, configured: Path | None = None) -> Path:
         if configured is None:
