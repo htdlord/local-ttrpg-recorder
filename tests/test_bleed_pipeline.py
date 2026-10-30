@@ -125,3 +125,21 @@ def test_bleed_across_a_chunk_boundary(tmp_path):
     )
     gm_words = sum(len(x.words) for x in result.transcript.segments if x.speaker == "gm")
     assert gm_words >= 6  # 2.5 s of gm in 0.4 s fake words, across the boundary
+
+
+def test_pre_mode_attenuates_before_asr_with_its_own_cache_keys(tmp_path):
+    session = make(tmp_path, [[(1, 3)], [(6, 8)], [(11, 13)]])
+    log = tmp_path / "calls.txt"
+    post, _ = run(session, settings(), log)
+    after_post = len(log.read_text(encoding="utf-8").splitlines())
+    pre, stats = run(session, settings('bleed.mode="pre"', "bleed.pre_attenuation_db=18"), log)
+    assert stats.transcribed == stats.chunks  # new ASR keys: the audio differs
+    assert len(log.read_text(encoding="utf-8").splitlines()) > after_post
+    # bleed (-18 dB) attenuated another 18 dB falls below what the fake engine hears
+    assert len(pre.transcript.segments) == 3 and not pre.transcript.suppressed
+    assert pre.bleed_mode_applied == "pre"
+    assert [s.speaker for s in pre.transcript.segments] == [
+        s.speaker for s in post.transcript.segments
+    ]
+    _, stats2 = run(session, settings('bleed.mode="pre"', "bleed.pre_attenuation_db=18"), log)
+    assert stats2.transcribed == 0  # cached under the pre-mode key

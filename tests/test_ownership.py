@@ -117,3 +117,19 @@ def test_manual_and_guided_warnings(tmp_path):
     session.config.coupling_db = [[0, -20], [-20, 0]]
     manual = compute_ownership(session, load_settings(overrides=['bleed.coupling="manual"']), None)
     assert manual.coupling.matrix[0, 1] == -20
+
+
+def test_pre_gains_attenuate_and_release():
+    from sessionscribe.core.pipeline.ownership import apply_gains, pre_gains
+
+    owned = np.array([True, True, False, False, False, False])
+    g = pre_gains(owned, 15.0, mute=False, release_frames=2)
+    db = 20 * np.log10(g)
+    np.testing.assert_allclose(db, [0, 0, -7.5, -15, -15, -15], atol=1e-4)
+    muted = pre_gains(owned, 15.0, mute=True, release_frames=0)
+    assert muted.tolist() == [1, 1, 0, 0, 0, 0]  # silence only with the explicit option
+    audio = np.ones(6 * 320, np.float32)
+    out = apply_gains(audio, g, 320, 160)
+    assert out[100] == 1.0 and abs(out[5 * 320 + 100] - 10 ** (-15 / 20)) < 1e-6
+    step = np.abs(np.diff(out)).max()
+    assert step < 0.01  # 10 ms ramps, no clicks

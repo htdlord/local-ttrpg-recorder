@@ -205,3 +205,42 @@ def track_local_mask(own: Ownership, speaker: str, offset: int, start: int, end:
     part = row[a:b]
     out[: part.size] = part
     return out
+
+
+def pre_gains(
+    owned: np.ndarray, attenuation_db: float, *, mute: bool, release_frames: int
+) -> np.ndarray:
+    """Per-frame linear gain for pre mode: 1 on owned frames, attenuated elsewhere.
+
+    After owned speech the gain falls back to the attenuation over ``release_frames``
+    (linear in dB); ``mute`` (expert option) silences instead of attenuating.
+    """
+    floor_db = -120.0 if mute else -attenuation_db
+    gain_db = np.where(owned, 0.0, floor_db).astype(np.float64)
+    if release_frames > 0:
+        since = np.full(owned.size, np.inf)
+        last = -np.inf
+        for t, own in enumerate(owned):
+            if own:
+                last = t
+            since[t] = t - last
+        ramp = (since > 0) & (since <= release_frames)
+        gain_db[ramp] = np.maximum(gain_db[ramp], floor_db * since[ramp] / release_frames)
+    gain = np.power(10.0, gain_db / 20.0)
+    if mute:
+        gain[gain_db <= -120.0] = 0.0
+    return gain.astype(np.float32)
+
+
+def apply_gains(audio: np.ndarray, gains: np.ndarray, frame: int, ramp: int) -> np.ndarray:
+    """Multiply 16 kHz audio by per-frame gains with ``ramp``-sample smoothing (no clicks)."""
+    per_sample = np.repeat(gains, frame)[: audio.size]
+    if per_sample.size < audio.size:
+        fill = gains[-1] if gains.size else 1.0
+        per_sample = np.concatenate([per_sample, np.full(audio.size - per_sample.size, fill)])
+    if ramp > 1:
+        kernel = np.ones(ramp) / ramp
+        per_sample = np.convolve(
+            np.pad(per_sample, (ramp // 2, ramp - 1 - ramp // 2), mode="edge"), kernel, mode="valid"
+        )
+    return (audio * per_sample.astype(np.float32)).astype(np.float32)

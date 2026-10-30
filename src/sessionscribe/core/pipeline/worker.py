@@ -37,12 +37,15 @@ from sessionscribe.core.pipeline.asr import (
     Word,
 )
 from sessionscribe.core.pipeline.chunks import Chunk
+from sessionscribe.core.pipeline.ownership import apply_gains
 from sessionscribe.core.pipeline.refill import refill_holes
 from sessionscribe.core.timeline import TIMELINE_RATE, WHISPER_RATE, rescale
 
 log = logging.getLogger(__name__)
 
 POLL_S = 0.5
+PRE_FRAME_16K = 320  # 20 ms ownership frames at 16 kHz
+PRE_RAMP_16K = 160  # 10 ms gain ramps
 STOP_TIMEOUT_S = 10.0
 
 
@@ -74,6 +77,8 @@ class AsrJob:
     channel: int | None
     chunk: Chunk
     key: CacheKey
+    # Pre mode: per 20 ms frame of the context range, the gain to apply before ASR.
+    gains: np.ndarray | None = None
 
     def describe(self) -> str:
         a, b = self.chunk.owned_start / TIMELINE_RATE, self.chunk.owned_end / TIMELINE_RATE
@@ -181,6 +186,8 @@ def run_job(
     """Transcribe one chunk (plus refills of word-less speech) and store it; small stats only."""
     track = VirtualTrack.open(Path(job.source), job.channel)
     audio = chunk_audio(track, job.chunk)
+    if job.gains is not None:  # pre mode: attenuate frames this track does not own
+        audio = apply_gains(audio, job.gains, PRE_FRAME_16K, PRE_RAMP_16K)
     result = engine.transcribe(audio, source_id=job.participant, sink=sink, cancel=cancel)
     offset = job.chunk.ctx_start
     owned = (job.chunk.owned_start - offset, job.chunk.owned_end - offset)
