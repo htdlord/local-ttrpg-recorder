@@ -350,3 +350,8 @@ Measured on clip01 (large-v3 float16 quality; WER against the draft reference, i
   - 2 `high_no_speech` flags, both on refilled segments;
   - 7 `possible_missed_speech` passages totalling 14.9 s, all on the two speaking tracks (`gm`, `seat_3`), likely bleed or laughter. The triage reference will tell.
 - Chunk-length effects that remain at 30 s mostly come from re-windowing, and are much smaller at the default 600 s. Repeat on the ≥ 5 min clip (open task).
+
+## 2026-10-30 – Open tasks after M2 (owner notes)
+
+- [ ] `export`: warn when the ASR settings resolved now (preset, config, session, `--set`) differ from the last `transcribe` run's (`last_settings.json`), instead of silently using the stored ones. Do it the next time the export path is touched.
+- [x] Short-chunk WER loss recorded in SPEC §14 as a known risk for live transcription.
