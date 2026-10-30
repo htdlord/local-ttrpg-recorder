@@ -152,7 +152,7 @@ class BleedSettings(_Section):
         10.0, description="A track owns nothing quieter than its noise level + this."
     )
     suppress_below: float = Field(
-        0.3, ge=0, le=1, description="Ownership under this may be suppressed as bleed."
+        0.5, ge=0, le=1, description="Ownership under this may be suppressed as bleed."
     )
     low_ownership_below: float = Field(
         0.6, ge=0, le=1, description="Ownership under this is flagged low_ownership."

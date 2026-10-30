@@ -569,3 +569,41 @@ def triage_score(
     typer.echo(
         f"wrong speaker (w, {score.wrong_speaker_units}): attributed {pct(score.attribution)}"
     )
+
+
+@bench_app.command("bleed")
+def bench_bleed(
+    folder: ClipArg,
+    out: Annotated[Path, typer.Option(help="Parent folder for the run.")] = Path("work/bench"),
+    only: Annotated[
+        str | None, typer.Option(help="Only variants whose name contains this text.")
+    ] = None,
+) -> None:
+    """Bleed handling off vs post/pre variants, scored on the clip's triage labels."""
+    import time
+
+    from sessionscribe.core.bench.bleed import default_variants, run_bleed_matrix
+    from sessionscribe.core.bench.triage import triage_path
+    from sessionscribe.core.pipeline.asr import AsrError
+
+    clip = _load_clip(folder)
+    if not triage_path(clip).is_file():
+        raise _fail("no triage.json; label the clip with 'bench ref triage' first")
+    variants = [v for v in default_variants() if not only or only in v.name]
+    run_dir = out / f"bleed-{time.strftime('%Y%m%d-%H%M%S')}"
+    typer.echo(f"{len(variants)} variants on {clip.config.id} -> {run_dir}")
+    try:
+        rows = run_bleed_matrix(clip, run_dir, variants)
+    except (AsrError, OSError, ValueError) as exc:
+        raise _fail(str(exc)) from exc
+    for r in rows:
+        s = r["score"]
+
+        def pct(v: float | None) -> str:
+            return "n/a" if v is None else f"{100 * v:.1f} %"
+
+        typer.echo(
+            f"  {r['variant']:14s} recall {pct(s['speech_recall'])}, false suppression "
+            f"{pct(s['false_suppression'])}, residual duplicates {pct(s['residual_duplicates'])}"
+        )
+    typer.echo(str(run_dir / "results.md"))
