@@ -318,6 +318,35 @@ Built at the start of M3, before any M3 measurement. M3 acceptance needs complet
   - Longer context does not fix it reliably: 5/10/15/30 s of context gave 0.1/4.0/8.2/0.4 word-seconds in the 15 s after one boundary, against 6.9 unchunked.
 - **The same dropout exists without chunking:** 12 % of VAD speech on clip01 has no word at all. Some of it may be bleed or laughter, and the triage reference will tell.
 - **At the default 600 s owned range** boundaries are 20× sparser than in the 30 s cell. The extra loss is estimated at about 2 s per boundary, under 1 % of speech.
-- **Proposed remedy (not implemented, owner decision):** after a chunk's ASR, re-transcribe every VAD speech stretch of at least 1.5 s that got no words, as its own short window with a little padding.
+- **Proposed remedy (decided and implemented; see the next entry):** after a chunk's ASR, re-transcribe every VAD speech stretch of at least 1.5 s that got no words, as its own short window with a little padding.
   - Insert the result flagged `refilled`, and cache it with the chunk.
   - This addresses dropout everywhere, not only at boundaries. The cost is extra ASR on the uncovered share (about 12 % here).
+
+## 2026-10-30 – Re-transcribe word-less VAD speech (owner decision)
+
+The owner chose the remedy proposed above, with two additions. Implemented in M2:
+
+- After each chunk's ASR, every VAD speech stretch of at least `asr.refill_min_s` (1.5 s) that overlaps the owned range and has no recognised word is transcribed again as its own window.
+  - The window gets `asr.refill_pad_s` (0.5 s) of extra audio on each side, but only words whose midpoint lies inside the stretch are kept, because the padding was recognised already.
+  - Recovered segments get raw indices after the chunk's own segments, so ids stay stable. They are cached with the chunk; `processing_version` is now 2.
+- **Owner addition 1:** recovered segments carry the `refilled` flag (always shown, even with quality flags off) **and go through every other quality flag**. The model hallucinates more easily on silence or laughter.
+- **Owner addition 2:** a stretch that still has no words after re-transcription is reported as `possible_missed_speech`, for review. It appears in the JSON `possible_missed_speech` list and as an md line ("⚠ possible missed speech, N s"); the CLI prints the count.
+- `asr.refill_holes = false` switches the step off. It needs VAD.
+
+Measured on clip01 (large-v3 float16 quality; WER against the draft reference, informational only). "Word-less" counts VAD stretches of at least 1.5 s with no recognised word.
+
+| owned range | refill | WER % | recall % | word-less VAD speech | RTF |
+|---|---|---|---|---|---|
+| whole track | off | 21.9 | 86.7 | 25.5 s (10) | 0.047 |
+| whole track | **on** | **20.7** | **88.3** | 14.9 s (7) | 0.053 |
+| 60 s | off | 26.0 | 83.3 | 29.4 s (12) | 0.052 |
+| 60 s | on | 22.1 | 86.7 | 15.2 s (8) | 0.060 |
+| 30 s | off | 31.9 | 81.7 | 39.5 s (11) | 0.062 |
+| 30 s | on | 29.9 | 88.3 | 23.7 s (6) | 0.069 |
+
+- **Refill improves WER and recall at every chunk length**, for about 13 % more processing time. Even 30 s chunks reach the unchunked recall. A first version that kept the words in the padding duplicated neighbouring words (WER 24.8 % on whole tracks); it was fixed before these numbers were taken.
+- **Session run on clip01:**
+  - 74 segments, 5 of them `refilled`;
+  - 2 `high_no_speech` flags, both on refilled segments;
+  - 7 `possible_missed_speech` passages totalling 14.9 s, all on the two speaking tracks (`gm`, `seat_3`), likely bleed or laughter. The triage reference will tell.
+- Chunk-length effects that remain at 30 s mostly come from re-windowing, and are much smaller at the default 600 s. Repeat on the ≥ 5 min clip (open task).
