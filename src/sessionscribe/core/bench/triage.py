@@ -54,13 +54,15 @@ LABEL_NAMES = {
     "?": "unsure",
 }
 
-# Suggestion thresholds (dB difference own - loudest other, text similarity 0-100).
-BLEED_DB = 3.0
-OWN_DB = 6.0
+# Suggestion thresholds. Levels are relative to each track's own typical speech level
+# (95th percentile of its active frames), because mic gains differ by 15-20 dB in practice.
+BLEED_DB = 6.0  # another track this much louder (relative) suggests bleed
+OWN_DB = 6.0  # own track this much louder suggests own speech
+SPEAKING_REL = -10.0  # both tracks this close to their speech level: both speak
+QUIET_REL = -25.0  # a missed-speech stretch this far below own speech: no speech
+ACTIVE_DB = -60.0  # frames above this count when estimating a track's speech level
 SIMILAR = 80.0
 DIFFERENT = 50.0
-SPEAKING_DB = -45.0
-QUIET_DB = -50.0
 NEAR_S = 1.0  # other-track segments this close in time are compared by text
 
 UnitKind = Literal["segment", "missed"]
@@ -76,6 +78,7 @@ class TriageUnit(BaseModel):
     end: float
     suggestion: str | None = None
     suggestion_source: str | None = None
+    # Levels relative to each track's own typical speech level (0 dB = speaking normally).
     own_db: float | None = None
     other_db: float | None = None
     other_speaker: str | None = None
@@ -198,21 +201,38 @@ def best_similarity(
     return best
 
 
+def speech_level(env: np.ndarray) -> float:
+    """A track's typical own-speech level: 95th percentile of its active frames."""
+    active = env[env > ACTIVE_DB]
+    if active.size == 0:
+        return float(env.max()) if env.size else SILENCE_DB
+    return float(np.percentile(active, 95))
+
+
+def relative_envelopes(envelopes: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return {k: (v - speech_level(v)).astype(np.float32) for k, v in envelopes.items()}
+
+
 def suggest(
-    kind: UnitKind, levels: Levels, similarity: float, similar_speaker: str | None
+    kind: UnitKind,
+    levels: Levels,
+    similarity: float,
+    similar_speaker: str | None,
+    *,
+    other_has_segment: bool,
 ) -> tuple[str | None, str | None]:
-    """(label, source) or (None, None) when a person has to decide."""
-    other = levels.other_db
-    diff = None if other is None else levels.own_db - other
+    """(label, source) or (None, None) when a person has to decide; relative levels."""
+    own, other = levels.own_db, levels.other_db
+    diff = None if other is None else own - other
     if kind == "missed":
-        if levels.own_db < QUIET_DB:
+        if own < QUIET_REL:
             return "n", None
-        if diff is not None and diff <= -BLEED_DB:
+        if diff is not None and diff <= -BLEED_DB and other_has_segment:
             return "b", levels.other_speaker
         return None, None
     if diff is None:  # single track
-        return ("s", None) if levels.own_db >= QUIET_DB else (None, None)
-    if diff <= -BLEED_DB:
+        return ("s", None) if own >= QUIET_REL else (None, None)
+    if diff <= -BLEED_DB and other_has_segment:
         return "b", levels.other_speaker
     if similarity >= SIMILAR and diff < 0:
         return "b", similar_speaker
@@ -220,9 +240,10 @@ def suggest(
         return "s", None
     if (
         abs(diff) < BLEED_DB
-        and similarity < DIFFERENT
+        and own >= SPEAKING_REL
         and other is not None
-        and other > SPEAKING_DB
+        and other >= SPEAKING_REL
+        and similarity < DIFFERENT
     ):
         return "o", None
     return None, None
@@ -239,12 +260,17 @@ def build_units(
     items: list[tuple[TranscriptSegment, UnitKind]] = [(s, "segment") for s in segs]
     items += [(m, "missed") for m in result.transcript.missed]
     order = {p.id: i for i, p in enumerate(result.participants)}
+    envelopes = relative_envelopes(envelopes)
     items.sort(key=lambda it: (it[0].start, order.get(it[0].speaker, 0), it[0].id))
     units: list[TriageUnit] = []
     for seg, kind in items:
         levels = unit_levels(envelopes, seg.speaker, seg.start, seg.end, frame)
         sim, sim_speaker = best_similarity(seg, segs) if kind == "segment" else (0.0, None)
-        label, source = suggest(kind, levels, sim, sim_speaker)
+        has_segment = any(
+            o.speaker == levels.other_speaker and o.end > seg.start and o.start < seg.end
+            for o in segs
+        )
+        label, source = suggest(kind, levels, sim, sim_speaker, other_has_segment=has_segment)
         units.append(
             TriageUnit(
                 id=seg.id,
@@ -260,7 +286,30 @@ def build_units(
                 similarity=round(sim, 1) if kind == "segment" else None,
             )
         )
+    drop_contradictions(units)
     return units
+
+
+def drop_contradictions(units: Sequence[TriageUnit]) -> int:
+    """Clear "b" suggestions of overlapping units that name each other as the source.
+
+    Level cues cannot tell which way the bleed goes there; a person decides.
+    """
+    bad: set[int] = set()
+    for i, x in enumerate(units):
+        if x.suggestion != "b":
+            continue
+        for j, y in enumerate(units):
+            if (
+                y.speaker == x.suggestion_source
+                and y.suggestion == "b"
+                and y.suggestion_source == x.speaker
+                and min(x.end, y.end) > max(x.start, y.start)
+            ):
+                bad.update((i, j))
+    for i in bad:
+        units[i].suggestion = units[i].suggestion_source = None
+    return len(bad)
 
 
 def session_envelopes(

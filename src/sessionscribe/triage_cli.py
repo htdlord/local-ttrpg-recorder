@@ -151,9 +151,9 @@ def describe(unit: TriageUnit, pos: int, total: int, names: Mapping[str, str]) -
     if unit.kind == "missed":
         head += " · possible missed speech"
     if unit.own_db is not None:
-        head += f" · own {unit.own_db:.0f} dB"
+        head += f" · own {unit.own_db:+.0f} dB"
     if unit.other_speaker and unit.other_db is not None:
-        head += f" / {names.get(unit.other_speaker, unit.other_speaker)} {unit.other_db:.0f} dB"
+        head += f" / {names.get(unit.other_speaker, unit.other_speaker)} {unit.other_db:+.0f} dB"
     if unit.suggestion:
         src = (
             f"←{names.get(unit.suggestion_source, unit.suggestion_source)}"
