@@ -21,6 +21,18 @@ def _rig():
     host_api = os.environ.get("SESSIONSCRIBE_TEST_HOST_API")
     if not device or not host_api:
         pytest.skip("set SESSIONSCRIBE_TEST_DEVICE and SESSIONSCRIBE_TEST_HOST_API")
+    import sys
+
+    from sessionscribe.core.audio import backend
+
+    if (
+        "asio" in host_api.lower()
+        and "sounddevice" in sys.modules
+        and not backend._asio_requested_at_import
+    ):
+        pytest.skip(
+            "sounddevice was loaded without ASIO earlier in this run; run with -k rig tests"
+        )
     from sessionscribe.core.audio.backend import parse_channel_spec
 
     return (
