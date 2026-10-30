@@ -174,6 +174,8 @@ class SegmentWriter:
         self._files: list[sf.SoundFile] = []
         self._records: list[SegmentRecord] = []
         self._in_segment = 0
+        self._since_flush = 0
+        self.flush_frames = manifest.samplerate  # flush to disk every second (crash safety)
 
     @property
     def n(self) -> int:
@@ -236,8 +238,14 @@ class SegmentWriter:
             self._in_segment += part.shape[0]
             self.position += part.shape[0]
             start += part.shape[0]
+            self._since_flush += part.shape[0]
             if self._in_segment >= self.segment_frames:
                 self.close_segment()
+                self._since_flush = 0
+            elif self._since_flush >= self.flush_frames:
+                for f in self._files:
+                    f.flush()
+                self._since_flush = 0
 
     def pad(self, frames: int) -> None:
         chunk = 1 << 16
