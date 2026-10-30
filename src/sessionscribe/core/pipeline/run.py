@@ -103,6 +103,8 @@ class RunStats:
     transcribed: int = 0
     asr_s: float = 0.0
     crashes: int = 0
+    refilled: int = 0  # segments recovered by re-transcribing word-less VAD speech
+    missed: int = 0  # VAD stretches still without words (flagged for review)
     missing: list[str] = field(default_factory=list)
 
 
@@ -269,7 +271,15 @@ def _run_session(
             if settings.vad.enabled
             else None
         )
-        tracks.append(TrackInput(pid, p.participant.offset_samples, kept, vad[pid]))
+        missed = [
+            (c.index, max(a, c.owned_start), min(b, c.owned_end))
+            for c, r in zip(p.chunks, chunk_results, strict=True)
+            for a, b in r.missed
+            if min(b, c.owned_end) > max(a, c.owned_start)
+        ]
+        stats.missed += len(missed)
+        stats.refilled += sum(k.segment.refilled for k in kept if not k.boundary_duplicate)
+        tracks.append(TrackInput(pid, p.participant.offset_samples, kept, vad[pid], missed))
         langs = Counter(r.language for r in chunk_results if r.language)
         languages[pid] = langs.most_common(1)[0][0] if langs else None
         for c, r, key in zip(p.chunks, chunk_results, p.keys, strict=True):

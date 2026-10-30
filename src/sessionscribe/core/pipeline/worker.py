@@ -16,7 +16,7 @@ import multiprocessing as mp
 import signal
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -37,6 +37,7 @@ from sessionscribe.core.pipeline.asr import (
     Word,
 )
 from sessionscribe.core.pipeline.chunks import Chunk
+from sessionscribe.core.pipeline.refill import refill_holes
 from sessionscribe.core.timeline import TIMELINE_RATE, WHISPER_RATE, rescale
 
 log = logging.getLogger(__name__)
@@ -89,6 +90,9 @@ class ChunkResult:
     transcribe_s: float = 0.0
     vad_s: float = 0.0
     model: dict[str, Any] = field(default_factory=dict)
+    # VAD speech still without words after re-transcription (track-local samples).
+    missed: list[tuple[int, int]] = field(default_factory=list)
+    refill_holes: int = 0
 
 
 def encode_result(result: ChunkResult) -> dict[str, Any]:
@@ -104,9 +108,12 @@ def encode_result(result: ChunkResult) -> dict[str, Any]:
                 "compression_ratio": s.compression_ratio,
                 "temperature": s.temperature,
                 "words": [[w.start, w.end, w.text, w.probability] for w in s.words],
+                "refilled": s.refilled,
             }
             for s in result.segments
         ],
+        "missed": [list(m) for m in result.missed],
+        "refill_holes": result.refill_holes,
         "vad_intervals": [[v.start, v.end] for v in result.vad_intervals],
         "language": result.language,
         "language_probability": result.language_probability,
@@ -130,6 +137,7 @@ def decode_result(data: dict[str, Any]) -> ChunkResult:
                 compression_ratio=s["compression_ratio"],
                 temperature=s["temperature"],
                 words=tuple(Word(a, b, t, p) for a, b, t, p in s["words"]),
+                refilled=s.get("refilled", False),
             )
             for s in data["segments"]
         ],
@@ -140,6 +148,8 @@ def decode_result(data: dict[str, Any]) -> ChunkResult:
         transcribe_s=data.get("transcribe_s", 0.0),
         vad_s=data.get("vad_s", 0.0),
         model=data.get("model", {}),
+        missed=[(a, b) for a, b in data.get("missed", [])],
+        refill_holes=data.get("refill_holes", 0),
     )
 
 
@@ -152,18 +162,11 @@ def chunk_audio(track: VirtualTrack, chunk: Chunk) -> np.ndarray:
 
 
 def _shift(seg: Segment, offset: int) -> Segment:
-    return Segment(
-        index=seg.index,
+    return replace(
+        seg,
         start=seg.start + offset,
         end=seg.end + offset,
-        text=seg.text,
-        avg_logprob=seg.avg_logprob,
-        no_speech_prob=seg.no_speech_prob,
-        compression_ratio=seg.compression_ratio,
-        temperature=seg.temperature,
-        words=tuple(
-            Word(w.start + offset, w.end + offset, w.text, w.probability) for w in seg.words
-        ),
+        words=tuple(replace(w, start=w.start + offset, end=w.end + offset) for w in seg.words),
     )
 
 
@@ -171,28 +174,39 @@ def run_job(
     engine: Engine,
     job: AsrJob,
     cache: Cache,
+    settings: Settings,
     sink: EventSink = null_sink,
     cancel: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """Transcribe one chunk and store it; returns small stats (no text)."""
+    """Transcribe one chunk (plus refills of word-less speech) and store it; small stats only."""
     track = VirtualTrack.open(Path(job.source), job.channel)
     audio = chunk_audio(track, job.chunk)
     result = engine.transcribe(audio, source_id=job.participant, sink=sink, cancel=cancel)
     offset = job.chunk.ctx_start
+    owned = (job.chunk.owned_start - offset, job.chunk.owned_end - offset)
+    refill = refill_holes(
+        engine, audio, result, settings, source_id=job.participant, owned=owned, cancel=cancel
+    )
     chunk_result = ChunkResult(
-        segments=[_shift(s, offset) for s in result.segments],
+        segments=[_shift(s, offset) for s in [*result.segments, *refill.segments]],
         vad_intervals=[
             SpeechInterval(v.start + offset, v.end + offset) for v in result.vad_intervals
         ],
         language=result.language,
         language_probability=result.language_probability,
         batch_size=result.batch_size,
-        transcribe_s=result.transcribe_s,
+        transcribe_s=result.transcribe_s + refill.transcribe_s,
         vad_s=result.vad_s,
         model=asdict(result.model),
+        missed=[(a + offset, b + offset) for a, b in refill.missed],
+        refill_holes=refill.holes,
     )
     cache.store_json(job.key, encode_result(chunk_result))
-    return {"segments": len(result.segments), "transcribe_s": round(result.transcribe_s, 3)}
+    return {
+        "segments": len(chunk_result.segments),
+        "refilled": len(refill.segments),
+        "transcribe_s": round(chunk_result.transcribe_s, 3),
+    }
 
 
 # --- exit codes ---------------------------------------------------------------------------
@@ -256,7 +270,7 @@ class InlineRunner:
     ) -> dict[str, Any]:
         if self._engine is None:
             self._engine = self.factory(self.settings)
-        return run_job(self._engine, job, self.cache, sink, cancel)
+        return run_job(self._engine, job, self.cache, self.settings, sink, cancel)
 
     def close(self) -> None:
         self._engine = None
@@ -286,7 +300,7 @@ def _worker_main(conn: Any, settings_json: str, cache_root: str, factory: Engine
                 conn.send(("warning", event.stage, event.message))
 
         try:
-            conn.send(("done", run_job(engine, job, cache, sink)))
+            conn.send(("done", run_job(engine, job, cache, settings, sink)))
         except Exception as exc:
             conn.send(("error", type(exc).__name__, str(exc)))
 

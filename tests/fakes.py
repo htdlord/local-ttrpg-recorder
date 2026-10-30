@@ -66,8 +66,13 @@ class FakeEngine:
         calls: Path | None = None,
         crash_state: Path | None = None,
         crash_on: str | None = None,
+        drop_first_above_s: float | None = None,
+        deaf: bool = False,
     ) -> None:
         self.calls, self.crash_state, self.crash_on = calls, crash_state, crash_on
+        # Whisper-like dropout: on audio longer than this, the first loud stretch gets no
+        # segment (VAD still reports it); ``deaf`` drops it on short refill windows too.
+        self.drop_first_above_s, self.deaf = drop_first_above_s, deaf
         self.loaded = LOADED
 
     def transcribe(self, audio, *, source_id, sink=None, cancel=None):
@@ -80,7 +85,11 @@ class FakeEngine:
                 self.crash_state.write_text(str(left - 1), encoding="utf-8")
                 crash()
         segments = []
-        for i, (a, b) in enumerate(active_regions(audio)):
+        regions = active_regions(audio)
+        limit = self.drop_first_above_s
+        if limit is not None and regions and (self.deaf or len(audio) > limit * WHISPER_RATE):
+            regions = regions[1:]
+        for i, (a, b) in enumerate(regions):
             step = int(WORD * WHISPER_RATE)
             words = tuple(
                 Word(to_timeline(s), to_timeline(min(b, s + step)), f" ő{k}", 0.9)
@@ -124,11 +133,15 @@ class FakeFactory:
     crash_state: Path | None = None
     crash_on: str | None = None
     fail_load: bool = False
+    drop_first_above_s: float | None = None
+    deaf: bool = False
 
     def __call__(self, settings):
         if self.fail_load:
             raise RuntimeError("no model here")
-        return FakeEngine(self.calls, self.crash_state, self.crash_on)
+        return FakeEngine(
+            self.calls, self.crash_state, self.crash_on, self.drop_first_above_s, self.deaf
+        )
 
 
 class OomBatched:

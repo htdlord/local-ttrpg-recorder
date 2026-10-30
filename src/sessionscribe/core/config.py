@@ -84,6 +84,11 @@ class AsrSettings(_Section):
     chunk_boundary_search_s: float = Field(
         15.0, ge=0, description="How far a boundary may move to the quietest point."
     )
+    # Whisper sometimes skips speech after a window start (DECISIONS 2026-10-30): VAD
+    # speech that got no words is transcribed again as its own short window.
+    refill_holes: bool = Field(True, description="Re-transcribe VAD speech without words.")
+    refill_min_s: float = Field(1.5, gt=0, description="Shortest word-less stretch to refill.")
+    refill_pad_s: float = Field(0.5, ge=0, description="Audio added around a refill window.")
 
 
 DEFAULT_TEMPERATURES: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)

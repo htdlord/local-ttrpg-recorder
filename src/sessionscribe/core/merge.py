@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from sessionscribe.core.config import QualitySettings
 from sessionscribe.core.pipeline.asr import SpeechInterval, Word
 from sessionscribe.core.pipeline.chunks import KeptSegment
-from sessionscribe.core.quality import quality_flags
+from sessionscribe.core.quality import POSSIBLE_MISSED_SPEECH, quality_flags
 
 BOUNDARY_DUPLICATE = "chunk_boundary_duplicate"
 
@@ -34,6 +34,8 @@ class TrackInput:
     offset: int  # session timeline samples
     kept: Sequence[KeptSegment]
     vad: Sequence[SpeechInterval] | None  # None: VAD off
+    # VAD speech still without words after re-transcription (track-local samples).
+    missed: Sequence[tuple[int, int, int]] = ()  # (chunk, start, end)
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,8 @@ class TranscriptSegment:
 class Transcript:
     segments: list[TranscriptSegment] = field(default_factory=list)
     suppressed: list[TranscriptSegment] = field(default_factory=list)
+    # Empty-text entries flagged possible_missed_speech, for review next to the segments.
+    missed: list[TranscriptSegment] = field(default_factory=list)
 
 
 def chunk_id(participant: str, chunk: int) -> str:
@@ -111,12 +115,31 @@ def merge_tracks(
                 suppression_reason=BOUNDARY_DUPLICATE if kept.boundary_duplicate else None,
             )
             (out.suppressed if kept.boundary_duplicate else out.segments).append(item)
+        for n, (chunk, start, end) in enumerate(track.missed):
+            out.missed.append(
+                TranscriptSegment(
+                    id=f"{chunk_id(track.participant, chunk)}-m{n:03d}",
+                    speaker=track.participant,
+                    chunk_id=chunk_id(track.participant, chunk),
+                    start=start + track.offset,
+                    end=end + track.offset,
+                    track_start=start,
+                    text="",
+                    avg_logprob=0.0,
+                    no_speech_prob=0.0,
+                    compression_ratio=0.0,
+                    temperature=None,
+                    words=(),
+                    quality_flags=(POSSIBLE_MISSED_SPEECH,),
+                )
+            )
 
     def key(s: TranscriptSegment) -> tuple[int, int, str]:
         return s.start, order[s.speaker], s.id
 
     out.segments.sort(key=key)
     out.suppressed.sort(key=key)
+    out.missed.sort(key=key)
     return out
 
 

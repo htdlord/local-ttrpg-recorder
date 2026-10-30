@@ -95,6 +95,7 @@ def to_md(result: SessionResult) -> str:
             ),
         ]
     lines.append("")
+    entries: list[tuple[int, str]] = []
     for group in _groups(result):
         marks = ""
         if any(s.overlap for s in group):
@@ -102,7 +103,19 @@ def to_md(result: SessionResult) -> str:
         if any(s.quality_flags for s in group):
             marks += f" {FLAG_MARK}"
         clock = format_clock(group[0].start, millis=millis)
-        lines.append(f"**[{clock}] {result.name_of(group[0].speaker)}:**{marks} {_text(group)}  ")
+        who = result.name_of(group[0].speaker)
+        entries.append((group[0].start, f"**[{clock}] {who}:**{marks} {_text(group)}  "))
+    for m in result.transcript.missed:
+        clock = format_clock(m.start, millis=millis)
+        seconds = (m.end - m.start) / TIMELINE_RATE
+        entries.append(
+            (
+                m.start,
+                f"**[{clock}] {result.name_of(m.speaker)}:** {FLAG_MARK} "
+                f"_(possible missed speech, {seconds:.1f} s)_  ",
+            )
+        )
+    lines += [text for _, text in sorted(entries, key=lambda e: e[0])]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -199,6 +212,17 @@ def to_json(result: SessionResult) -> dict[str, Any]:
         "processing_events": result.processing_events,
         "segments": [_segment_json(s) for s in result.transcript.segments],
         "suppressed": [_segment_json(s) for s in result.transcript.suppressed],
+        "possible_missed_speech": [
+            {
+                "id": m.id,
+                "speaker": m.speaker,
+                "start": samples_to_seconds(m.start),
+                "end": samples_to_seconds(m.end),
+                "audio_start_sample": m.track_start,
+                "quality_flags": list(m.quality_flags),
+            }
+            for m in result.transcript.missed
+        ],
     }
 
 
