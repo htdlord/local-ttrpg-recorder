@@ -37,7 +37,11 @@ from sessionscribe.core.pipeline.asr import (
 from sessionscribe.core.pipeline.attribution import apply_bleed_handling
 from sessionscribe.core.pipeline.chunks import Chunk, plan_chunks, resolve_chunks
 from sessionscribe.core.pipeline.features import frame_samples, track_envelope
-from sessionscribe.core.pipeline.ownership import compute_ownership
+from sessionscribe.core.pipeline.ownership import (
+    compute_ownership,
+    pre_gains,
+    track_local_mask,
+)
 from sessionscribe.core.pipeline.worker import (
     AsrJob,
     ChunkResult,
@@ -73,9 +77,17 @@ def default_model_identity(settings: Settings) -> dict[str, Any]:
 
 
 def asr_key(
-    track: VirtualTrack, chunk: Chunk, settings: Settings, model: dict[str, Any]
+    track: VirtualTrack,
+    chunk: Chunk,
+    settings: Settings,
+    model: dict[str, Any],
+    ownership_key: str | None = None,
 ) -> CacheKey:
-    """SPEC §5.7 asr layer. Participant id, name and offset are deliberately absent."""
+    """SPEC §5.7 asr layer. Participant id, name and offset are deliberately absent.
+
+    In pre mode the audio ASR sees depends on the ownership masks, so their key and the
+    attenuation settings join the key.
+    """
     rate = track.samplerate
     start = rescale(chunk.ctx_start, TIMELINE_RATE, rate)
     end = rescale(chunk.ctx_end, TIMELINE_RATE, rate)
@@ -94,6 +106,14 @@ def asr_key(
             "vad": settings.vad.model_dump(mode="json"),
             "libraries": _library_versions(),
             "processing_version": PROCESSING_VERSION,
+            "pre": None
+            if ownership_key is None
+            else {
+                "ownership": ownership_key,
+                "attenuation_db": settings.bleed.pre_attenuation_db,
+                "mute": settings.bleed.mute,
+                "release_ms": settings.bleed.release_ms,
+            },
         },
     )
 
@@ -138,6 +158,7 @@ def _plan(
     model: dict[str, Any],
     sink: EventSink,
     full_hash: bool,
+    ownership_key: str | None = None,
 ) -> list[_Planned]:
     frame_ms = settings.bleed.frame_ms
     frame = frame_samples(frame_ms)
@@ -154,7 +175,7 @@ def _plan(
             context_s=settings.asr.chunk_context_s,
             search_s=settings.asr.chunk_boundary_search_s,
         )
-        keys = [asr_key(track, c, settings, model) for c in chunks]
+        keys = [asr_key(track, c, settings, model, ownership_key) for c in chunks]
         planned.append(_Planned(p, track, length, chunks, keys))
     return planned
 
@@ -187,7 +208,9 @@ def _run_session(
 ) -> tuple[SessionResult, RunStats]:
     cache = Cache(session.work_dir(settings.output.work_dir) / "cache")
     model = model_identity(settings)
-    planned = _plan(session, settings, cache, model, sink, full_hash)
+    # Pre mode needs the masks before ASR (they shape what ASR hears); post mode after.
+    early = compute_ownership(session, settings, cache) if settings.bleed.mode == "pre" else None
+    planned = _plan(session, settings, cache, model, sink, full_hash, early.key if early else None)
     stats = RunStats(chunks=sum(len(p.chunks) for p in planned))
     events: list[dict[str, Any]] = []
     crash_events: list[CrashEvent] = []
@@ -231,12 +254,29 @@ def _run_session(
                 else:
                     recording_sink(event)
 
+            gains = None
+            if early is not None:
+                b = settings.bleed
+                owned = track_local_mask(
+                    early,
+                    p.participant.id,
+                    p.participant.offset_samples,
+                    chunk.ctx_start,
+                    chunk.ctx_end,
+                )
+                gains = pre_gains(
+                    owned,
+                    b.pre_attenuation_db,
+                    mute=b.mute,
+                    release_frames=round(b.release_ms / b.frame_ms),
+                )
             job = AsrJob(
                 p.participant.id,
                 str(session.source_path(p.participant)),
                 p.participant.channel,
                 chunk,
                 p.keys[ci],
+                gains,
             )
             run_with_retry(runner, job, cache, job_sink, cancel, crash_events)
             data = cache.load_json(p.keys[ci])
@@ -310,7 +350,7 @@ def _run_session(
     transcript = merge_tracks(tracks, settings.quality, gaps)
     coupling_db: list[list[float]] | None = None
     if settings.bleed.mode != "off":
-        ownership = compute_ownership(session, settings, cache)
+        ownership = early or compute_ownership(session, settings, cache)
         for warning in ownership.warnings:
             recording_sink(WarningEvent("bleed", warning))
         transcript = apply_bleed_handling(transcript, ownership, settings.bleed, settings.dedup)
