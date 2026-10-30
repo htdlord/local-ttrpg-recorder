@@ -166,9 +166,17 @@ def test_migrations():
     assert migrate({"a": 1}) == {"a": 1}  # missing version = current
 
 
+def test_v1_settings_drop_absolute_floor(tmp_path):
+    cfg = tmp_path / "old.toml"
+    toml = 'schema_version = 1\n[bleed]\nfloor_db = -60.0\nmode = "pre"\n'
+    cfg.write_text(toml, encoding="utf-8")
+    s = load_settings(preset=None, config_path=cfg)
+    assert s.bleed.mode == "pre" and s.bleed.floor_above_noise_db == 10.0
+
+
 def test_settings_schema_version_must_match():
     with pytest.raises(ValidationError):
-        Settings(schema_version=2)
+        Settings(schema_version=99)
 
 
 def test_resolve_runtime(monkeypatch):

@@ -28,17 +28,18 @@ def levels(
     gains: Sequence[float],
     noise: Sequence[float],
     seconds: float,
-    voice_db: float = -20.0,
+    voice_db: float | Sequence[float] = -20.0,
     rng_seed: int = 0,
 ) -> np.ndarray:
     """dB envelopes (n x frames): speech[j] = [(start_s, end_s), ...] of participant j."""
     rng = np.random.default_rng(rng_seed)
     n, frames = len(gains), int(seconds * FPS)
     voices = np.zeros((n, frames))
+    per = [voice_db] * n if isinstance(voice_db, (int, float)) else list(voice_db)
     for j, spans in enumerate(speech):
         for a, b in spans:
             jitter = rng.normal(0, 1.5, int(b * FPS) - int(a * FPS))
-            voices[j, int(a * FPS) : int(b * FPS)] = db_to_power(voice_db + jitter)
+            voices[j, int(a * FPS) : int(b * FPS)] = db_to_power(per[j] + jitter)
     out = np.zeros((n, frames))
     for i in range(n):
         heard = sum(voices[j] * db_to_power(acoustic[i][j]) for j in range(n))

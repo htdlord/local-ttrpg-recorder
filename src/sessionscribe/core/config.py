@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sessionscribe.core.cuda_libs import import_ctranslate2
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Known-good compute types per device, in order of preference (SPEC §3.1).
 KNOWN_GOOD_COMPUTE_TYPES: dict[str, tuple[str, ...]] = {
@@ -137,7 +137,7 @@ class VadSettings(_Section):
 
 
 class BleedSettings(_Section):
-    """Used from M3 on (SPEC §3.5)."""
+    """Bleed handling (SPEC §3.5). Defaults are provisional until measured on clip02."""
 
     mode: Literal["post", "pre", "off"] = "post"
     coupling: Literal["auto", "guided", "manual"] = "auto"
@@ -145,9 +145,20 @@ class BleedSettings(_Section):
     pre_attenuation_db: float = Field(15.0, ge=0)
     mute: bool = Field(False, description="Expert option: mute instead of attenuate (pre mode).")
     frame_ms: int = Field(20, gt=0)
-    hold_ms: int = Field(200, ge=0)
-    release_ms: int = Field(300, ge=0)
-    floor_db: float = -60.0
+    hold_ms: int = Field(200, ge=0, description="Ownership lasts this long after a frame.")
+    release_ms: int = Field(300, ge=0, description="Pre mode: gain ramp back to attenuation.")
+    # Per track, relative: mic gains differ by 15-20 dB (owner decision 2026-10-30).
+    floor_above_noise_db: float = Field(
+        10.0, description="A track owns nothing quieter than its noise level + this."
+    )
+    suppress_below: float = Field(
+        0.3, ge=0, le=1, description="Ownership under this may be suppressed as bleed."
+    )
+    low_ownership_below: float = Field(
+        0.6, ge=0, le=1, description="Ownership under this is flagged low_ownership."
+    )
+    coupling_min_frames: int = Field(250, ge=1, description="Frames needed per mic pair.")
+    coupling_default_db: float = Field(-30.0, description="Coupling for pairs with too few frames.")
 
 
 class DedupSettings(_Section):
@@ -324,8 +335,17 @@ def get_path(settings: Settings, path: str) -> Any:
 # --- layering, overrides, migrations, TOML ------------------------------------------------
 
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
+
+
+def _v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
+    """bleed.floor_db (absolute, never used) gave way to the per-track floor_above_noise_db."""
+    bleed = dict(data.get("bleed", {}))
+    bleed.pop("floor_db", None)
+    return {**data, "bleed": bleed} if "bleed" in data else data
+
+
 # MIGRATIONS[n] turns a schema_version n mapping into schema_version n + 1.
-MIGRATIONS: dict[int, Migration] = {}
+MIGRATIONS: dict[int, Migration] = {1: _v1_to_v2}
 
 
 def migrate(
