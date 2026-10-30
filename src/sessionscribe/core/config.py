@@ -157,6 +157,9 @@ class BleedSettings(_Section):
     low_ownership_below: float = Field(
         0.6, ge=0, le=1, description="Ownership under this is flagged low_ownership."
     )
+    text_similarity: float = Field(
+        70.0, ge=0, le=100, description="Bleed text must match the source's words this well."
+    )
     coupling_min_frames: int = Field(250, ge=1, description="Frames needed per mic pair.")
     coupling_default_db: float = Field(-30.0, description="Coupling for pairs with too few frames.")
 

@@ -2,9 +2,11 @@
 
 Everything here works on the merged transcript (session time) and the ownership masks;
 nothing re-runs ASR. Losing real speech is worse than a duplicate, so a segment is
-suppressed as bleed only with three pieces of evidence: its own track hardly owns its
-frames, another track does, and that track has the words itself. Without the last one
-it is the only copy (the triage ``w`` case): kept and flagged ``possible_wrong_speaker``.
+suppressed as bleed only with four pieces of evidence: its own track hardly owns its
+frames, another track does, that track has words there itself, and those words read
+like this segment's text. Without the source's words it is the only copy (the triage
+``w`` case): kept and flagged ``possible_wrong_speaker``. Without matching text (e.g. a
+short own interjection while the other person talks) it is kept and flagged.
 """
 
 from __future__ import annotations
@@ -61,6 +63,27 @@ def _add_flag(seg: TranscriptSegment, flag: str) -> TranscriptSegment:
     return replace(seg, quality_flags=(*seg.quality_flags, flag))
 
 
+def source_text(seg: TranscriptSegment, segments: Sequence[TranscriptSegment], source: str) -> str:
+    """The source's words around the segment (1 s margin), for the text evidence."""
+    lo, hi = seg.start - TIMELINE_RATE, seg.end + TIMELINE_RATE
+    parts: list[str] = []
+    for s in segments:
+        if s.speaker != source or s.end <= lo or s.start >= hi:
+            continue
+        if s.words:
+            parts += [w.text for w in s.words if w.end > lo and w.start < hi]
+        else:
+            parts.append(s.text)
+    return " ".join(parts)
+
+
+def text_matches(seg: TranscriptSegment, source_words: str, threshold: float) -> bool:
+    from rapidfuzz import fuzz
+
+    a, b = normalize(seg.text), normalize(source_words)
+    return bool(a and b) and fuzz.partial_ratio(a, b) >= threshold
+
+
 def _covered(start: int, end: int, segments: Sequence[TranscriptSegment]) -> float:
     """Share of ``[start, end)`` covered by the words (or spans) of ``segments``."""
     spans = sorted((w.start, w.end) for s in segments for w in (s.words or ())) + [
@@ -101,10 +124,13 @@ def attribute_bleed(transcript: Transcript, own: Ownership, settings: BleedSetti
             source_segments = [
                 s for m, s in enumerate(segs) if s.speaker == source and m not in candidates
             ]
-            if _covered(seg.start, seg.end, source_segments) >= SOURCE_WORDS:
+            if _covered(seg.start, seg.end, source_segments) < SOURCE_WORDS:
+                seg = replace(_add_flag(seg, POSSIBLE_WRONG_SPEAKER), probable_speaker=source)
+            elif text_matches(
+                seg, source_text(seg, source_segments, source), settings.text_similarity
+            ):
                 suppressed.append(replace(seg, suppression_reason="bleed", bleed_source=source))
                 continue
-            seg = replace(_add_flag(seg, POSSIBLE_WRONG_SPEAKER), probable_speaker=source)
         if seg.ownership is not None and seg.ownership < settings.low_ownership_below:
             seg = _add_flag(seg, LOW_OWNERSHIP)
         out.append(seg)
@@ -150,7 +176,12 @@ def dedup(
             short = min(len(texts[i].split()), len(texts[j].split())) < settings.min_words
             need_low, need_high = (SHORT_LOW, SHORT_HIGH) if short else (DEDUP_LOW, DEDUP_HIGH)
             if hi >= OVERLAP_OWNED and lo >= OVERLAP_OWNED:
-                continue  # both own their frames: two people said it, keep both
+                # Both own their frames. A short word: two people said it. A longer
+                # identical sentence at once is unlikely: a third person whose own mic
+                # missed it, heard on both - keep both, flag for review.
+                if not short:
+                    flag.update((i, j))
+                continue
             mixed = own is not None and (
                 owned_speech_samples(segs[low], own) >= OWNED_SPEECH_S * TIMELINE_RATE
             )

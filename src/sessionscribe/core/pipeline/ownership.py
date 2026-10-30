@@ -3,7 +3,7 @@
 Track i owns frame t when ``E_i >= floor_i`` and ``E_i >= max_j (E_j + C[i][j]) +
 margin``: it is louder than the bleed predicted from everyone else, so a quiet speaker
 next to a loud one still owns their frames. ``floor_i`` is relative to the track's own
-noise level (mic gains differ by 15-20 dB) and never above its speech level - 20 dB.
+noise level (mic gains differ by 15-20 dB).
 Ownership lasts ``hold_ms`` after an owned frame. If two tracks own a frame, both
 participants are speaking.
 """
@@ -24,24 +24,21 @@ from sessionscribe.core.pipeline.coupling import (
     estimate_coupling,
     manual_coupling,
     noise_level,
-    speech_level,
 )
 from sessionscribe.core.pipeline.features import frame_samples, track_envelope
 from sessionscribe.core.session import Session
 from sessionscribe.core.timeline import seconds_to_samples
 
 ATTRIBUTION_VERSION = 1  # bump when masks, attribution or dedup output changes
-FLOOR_BELOW_SPEECH_DB = 20.0
 
 
 def track_floors(levels: np.ndarray, above_noise_db: float) -> np.ndarray:
-    return np.array(
-        [
-            min(noise_level(row) + above_noise_db, speech_level(row) - FLOOR_BELOW_SPEECH_DB)
-            for row in levels
-        ],
-        dtype=np.float32,
-    )
+    """Per-track floor: noise level + ``above_noise_db``.
+
+    No cap from the speech level: on clip01 a silent, noisy track's "speech level" sat a
+    few dB above its noise, and a cap below it let the track own almost every frame.
+    """
+    return np.array([noise_level(row) + above_noise_db for row in levels], dtype=np.float32)
 
 
 def hold_forward(mask: np.ndarray, frames: int) -> np.ndarray:
