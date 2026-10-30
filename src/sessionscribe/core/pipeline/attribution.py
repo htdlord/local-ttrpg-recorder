@@ -30,6 +30,8 @@ SOURCE_WORDS = 0.5  # ... and its kept words cover at least this share of the se
 DEDUP_LOW, DEDUP_HIGH = 0.5, 0.5  # ownership evidence for removing a duplicate
 SHORT_LOW, SHORT_HIGH = 0.2, 0.8  # stronger evidence for utterances under min_words
 OVERLAP_OWNED = 0.5
+OVERLAP_MIN_S = 0.3
+OVERLAP_TEXT_MAX = 60.0  # texts at least this similar are copies, not an overlap
 OWNED_WORD = 0.5  # a word counts as own speech when its track owns this share of it
 OWNED_SPEECH_S = 0.5  # this much owned speech inside a segment keeps it (mixed: own + bleed)
 
@@ -210,8 +212,17 @@ def dedup(
 
 
 def mark_overlaps(transcript: Transcript, own: Ownership) -> Transcript:
-    """Segments of different speakers overlapping in time, both owning the shared frames."""
+    """Two people speaking at once: different speakers, overlapping in time by at least
+    ``OVERLAP_MIN_S``, both owning the shared frames, and saying different things.
+
+    Two copies of the same words are bleed or a duplicate, not an overlap (on clip01 the
+    ownership test alone marked most segments of two strongly coupled mics).
+    """
+    from rapidfuzz import fuzz
+
     segs = list(transcript.segments)
+    texts = [normalize(s.text) for s in segs]
+    min_len = round(OVERLAP_MIN_S * TIMELINE_RATE)
     marked: set[int] = set()
     for i, a in enumerate(segs):
         for j in range(i + 1, len(segs)):
@@ -221,7 +232,9 @@ def mark_overlaps(transcript: Transcript, own: Ownership) -> Transcript:
             if a.speaker == b.speaker:
                 continue
             lo, hi = max(a.start, b.start), min(a.end, b.end)
-            if hi <= lo:
+            if hi - lo < min_len:
+                continue
+            if texts[i] and texts[j] and fuzz.ratio(texts[i], texts[j]) >= OVERLAP_TEXT_MAX:
                 continue
             if (
                 own.owned(a.speaker, lo, hi) >= OVERLAP_OWNED
