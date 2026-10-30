@@ -1,0 +1,180 @@
+"""GUI end to end with pytest-qt (offscreen in CI) and fake ASR engines."""
+
+from typing import ClassVar
+
+import numpy as np
+import pytest
+import soundfile as sf
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtCore import QSettings
+
+from sessionscribe.core.session import Session
+from sessionscribe.gui.audio_preview import PreviewPlayer
+from sessionscribe.gui.main_window import MainWindow
+from sessionscribe.gui.state import AppState
+from tests.fakes import FakeFactory, SlowFactory
+
+R = 48_000
+IDENTITY = {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}
+
+
+class FakeSink:
+    started: ClassVar[list] = []
+
+    def __init__(self, rate):
+        self.rate = rate
+
+    def start(self, device):
+        FakeSink.started.append((self.rate, device.size()))
+
+    def stop(self):
+        pass
+
+
+def recordings(folder, n=3, seconds=8.0):
+    folder.mkdir(parents=True, exist_ok=True)
+    t = np.arange(int(0.8 * R)) / R
+    for i in range(n):
+        x = np.zeros(int(seconds * R), np.float32)
+        for start in (1.0 + i, 5.0 + 0.2 * i):
+            a = int(start * R)
+            x[a : a + len(t)] = 0.4 * np.sin(2 * np.pi * (400 + 50 * i) * t)
+        sf.write(str(folder / f"ch{i + 1:02d}_p{i}.wav"), x, R, subtype="FLOAT")
+    return folder
+
+
+def window(qtbot, tmp_path, factory=None, log=None):
+    state = AppState(
+        {
+            "isolation": "inline",
+            "factory": factory or FakeFactory(calls=log),
+            "model_identity": lambda s: IDENTITY,
+        }
+    )
+    prefs = QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat)
+    w = MainWindow(state, prefs, PreviewPlayer(sink_factory=FakeSink))
+    qtbot.addWidget(w)
+    w.show()
+    return w, state
+
+
+def test_window_starts_with_empty_states(qtbot, tmp_path):
+    w, _ = window(qtbot, tmp_path)
+    assert w.tabs.count() == 4
+    assert w.session_tab.stack.currentIndex() == 0  # empty state
+    assert w.result_tab.stack.currentIndex() == 0
+    assert not w.run_tab.run_btn.isEnabled()
+
+
+def test_workflow_a_with_review_and_reassignment(qtbot, tmp_path):
+    log = tmp_path / "calls.txt"
+    w, state = window(qtbot, tmp_path, log=log)
+    folder = recordings(tmp_path / "rec")
+    w.session_tab.new_from_folder(folder)
+    assert w.session_tab.table.rowCount() == 3
+    w.session_tab.name.setText("Próba")
+    assert w.session_tab.save()
+    assert Session.load(folder).config.name == "Próba"
+
+    # Basic setting: language, saved into the session's [settings]
+    lang = w.settings_tab.editors["basic:decoding.language"]
+    w.settings_tab._changed(lang.spec, "hu")
+    w.settings_tab.save_to_session()
+    assert Session.load(folder).config.settings == {"decoding": {"language": "hu"}}
+
+    w.run_tab.run_btn.click()
+    qtbot.waitUntil(lambda: state.result is not None and not w.run_tab.running, timeout=20000)
+    assert w.tabs.currentWidget() is w.result_tab
+    calls = log.read_text(encoding="utf-8")
+    rows = w.result_tab.model.rows
+    assert rows and all(r.kind in ("segment", "missed", "gap") for r in rows)
+
+    # filters
+    w.result_tab.search.setText("ő0")
+    assert all("ő0" in r.text for r in w.result_tab.model.rows)
+    w.result_tab.search.setText("")
+
+    # playback through the injected sink
+    assert w.result_tab.select_id(rows[0].id)
+    FakeSink.started.clear()
+    w.result_tab.play_btn.click()
+    assert FakeSink.started and FakeSink.started[0][0] == R
+
+    # reassign the first segment to another participant; re-export without ASR
+    target = rows[0]
+    other = next(p.id for p in state.session.participants if p.id != target.speaker)
+    w.result_tab.target.setCurrentIndex(w.result_tab.target.findData(other))
+    w.result_tab.reassign_btn.click()
+    qtbot.waitUntil(
+        lambda: (
+            not w.run_tab.running
+            and any(r.id == target.id and r.speaker == other for r in w.result_tab.model.rows)
+        ),
+        timeout=20000,
+    )
+    moved = next(r for r in w.result_tab.model.rows if r.id == target.id)
+    assert moved.reassigned_from == target.speaker and "reassigned" in moved.flags
+    assert Session.load(folder).config.reassignments[0].to == other
+    assert log.read_text(encoding="utf-8") == calls  # no ASR for the re-export
+    w.result_tab.select_id(target.id)
+    w.result_tab.undo_btn.click()
+    qtbot.waitUntil(
+        lambda: (
+            not w.run_tab.running
+            and any(
+                r.id == target.id and r.speaker == target.speaker for r in w.result_tab.model.rows
+            )
+        ),
+        timeout=20000,
+    )
+    assert Session.load(folder).config.reassignments == []
+
+
+def test_cancel_and_resume(qtbot, tmp_path):
+    w, state = window(qtbot, tmp_path, factory=SlowFactory(0.4))
+    folder = recordings(tmp_path / "rec", n=3, seconds=12.0)
+    w.session_tab.new_from_folder(folder)
+    w.session_tab.save()
+    state.set_settings(
+        state.settings.model_copy(
+            update={"asr": state.settings.asr.model_copy(update={"chunk_owned_s": 4.0})}
+        )
+    )
+    w.run_tab.run_btn.click()
+    qtbot.waitUntil(lambda: w.run_tab.progress.value() > 0, timeout=20000)
+    w.run_tab.cancel_btn.click()
+    qtbot.waitUntil(lambda: not w.run_tab.running, timeout=20000)
+    texts = [w.run_tab.log.item(i).text() for i in range(w.run_tab.log.count())]
+    assert any(t.startswith("Cancelled") for t in texts)
+    assert state.result is None
+    w.run_tab.run_btn.click()
+    qtbot.waitUntil(lambda: state.result is not None and not w.run_tab.running, timeout=30000)
+    done = w.run_tab.log.item(w.run_tab.log.count() - 1).text()
+    assert "from cache" in done and not done.startswith("Done: 9 chunk(s), 0 from cache")
+
+
+def test_settings_are_mode_aware(qtbot, tmp_path):
+    w, state = window(qtbot, tmp_path)
+    best_of = w.settings_tab.editors["decoding.best_of"]
+    assert best_of.control.isEnabled()
+    mode = w.settings_tab.editors["basic:asr.mode"]
+    w.settings_tab._changed(mode.spec, "fast")
+    assert not best_of.control.isEnabled()
+    assert best_of.note.text() == "no effect in this mode"
+    temp = w.settings_tab.editors["decoding.temperature"]
+    assert temp.note.text() == "only the first value is used in this mode"
+    beam = w.settings_tab.editors["decoding.beam_size"]
+    beam.control.setText("0")
+    beam._text_changed(beam.control)
+    assert state.settings.decoding.beam_size == 5  # rejected
+    assert beam.note.text()
+
+
+def test_theme_switch_rebuilds_the_window(qtbot, tmp_path):
+    w, _ = window(qtbot, tmp_path)
+    w.set_preference("theme", "dark")
+    assert w.tokens.background == "#14181d" and w.tabs.count() == 4
+    w.set_preference("theme", "light")
+    assert w.tokens.background == "#f4f6f8"

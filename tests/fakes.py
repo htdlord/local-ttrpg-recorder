@@ -172,3 +172,25 @@ class OomFactory:
         from sessionscribe.core.pipeline.asr import AsrEngine
 
         return AsrEngine(settings, object(), LOADED, lambda m: OomBatched(self.limit, self.sizes))
+
+
+@dataclass(frozen=True)
+class SlowFactory:
+    """A fake engine that takes ``seconds`` per chunk (cancel / progress tests)."""
+
+    seconds: float = 0.3
+
+    def __call__(self, settings):
+        import time
+
+        inner = FakeEngine()
+        delay = self.seconds
+
+        class Slow:
+            loaded = LOADED
+
+            def transcribe(self, audio, **kw):
+                time.sleep(delay)
+                return inner.transcribe(audio, **kw)
+
+        return Slow()
