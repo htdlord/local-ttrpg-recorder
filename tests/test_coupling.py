@@ -28,17 +28,32 @@ def test_auto_coupling_recovers_known_matrix():
 
 
 def test_too_few_frames_fall_back_to_default():
-    lv = sb.levels([[(0, 30)], [(30, 32)], []], sb.acoustic(3), GAINS, NOISE, 40)
+    # bela's mic is unplugged (only digital silence): no active frames at all
+    lv = sb.levels([[(0, 30)], [(30, 40)], []], sb.acoustic(3), GAINS, NOISE, 50)
+    lv[2] = -120.0
     c = estimate_coupling(SPEAKERS, lv, min_frames=250, default_db=-30)
-    assert ("gm", "anna") in c.weak_pairs() and ("gm", "bela") in c.weak_pairs()
-    assert c.matrix[0, 1] == -30 and c.source[(1, 0)] == "auto"
+    assert ("gm", "bela") in c.weak_pairs() and ("anna", "bela") in c.weak_pairs()
+    assert c.matrix[0, 2] == -30 and c.source[(0, 1)] == "auto"
+
+
+def test_never_speaking_track_is_kept_physically_plausible():
+    # bela never speaks: his "speech level" is gm's bleed, which would make bela's voice
+    # look louder on gm's mic than on his own; the pair sum is clamped
+    lv = sb.levels([[(0, 30)], [(30, 60)], []], sb.acoustic(3), GAINS, NOISE, 70)
+    c = estimate_coupling(SPEAKERS, lv, min_frames=250, default_db=-30)
+    for i, j in ((0, 2), (1, 2)):
+        assert c.matrix[i, j] + c.matrix[j, i] <= -20 + 1e-6
+    assert ("gm", "bela") in c.weak_pairs()
+    np.testing.assert_allclose(
+        c.matrix[2, 0], sb.expected_coupling(sb.acoustic(3), GAINS)[2, 0], atol=1.0
+    )
 
 
 def test_guided_overrides_auto_for_checked_speakers():
     ac = sb.acoustic(3, -18.0)
     lv = sb.levels([[(0, 5)], [(5, 10)], [(10, 15)]], ac, GAINS, NOISE, 20)
-    c = estimate_coupling(SPEAKERS, lv, min_frames=250, default_db=-30)
-    assert c.weak_pairs()  # 5 s each is too little for auto
+    c = estimate_coupling(SPEAKERS, lv, min_frames=2000, default_db=-30)
+    assert c.weak_pairs()  # too little audio for auto with this minimum
     c = apply_guided(
         c, lv, {"gm": (0, 250), "anna": (250, 500), "bela": (500, 750)}, min_frames=250
     )

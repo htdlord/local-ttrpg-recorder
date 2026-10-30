@@ -20,10 +20,13 @@ from sessionscribe.core.pipeline.features import SILENCE_DB
 ACTIVE_DB = -60.0  # frames above this count when estimating a track's speech level
 NOISE_ACTIVE_DB = -100.0  # frames above this (not digital silence) count for the noise level
 DOMINANT_REL_DB = -6.0  # speaking: within this of its own speech level
-DOMINANCE_MARGIN_DB = 6.0  # ... and this much above every other track (relative)
+ACTIVE_ABOVE_NOISE_DB = 15.0  # mic j "active": this far above its own noise level
+PEAK_MIN_FRAMES = 50  # a histogram peak needs at least 1 s of frames
+PEAK_SMOOTH_BINS = 5
+PAIR_SUM_MAX_DB = -20.0  # C[i][j] + C[j][i]: both acoustic paths, provisional
 GUIDED_REL_DB = -10.0  # mic check frames this close to the speaker's speech level count
 
-CouplingSource = Literal["auto", "guided", "manual", "default"]
+CouplingSource = Literal["auto", "guided", "manual", "default", "clamped"]
 
 
 def speech_level(env: np.ndarray) -> float:
@@ -62,18 +65,59 @@ class Coupling:
         return [[round(float(v), 1) for v in row] for row in self.matrix]
 
     def weak_pairs(self) -> list[tuple[str, str]]:
-        """(mic, voice) pairs that fell back to the default value."""
+        """(mic, voice) pairs that use the default or a clamped value."""
         return [
             (self.speakers[i], self.speakers[j])
             for (i, j), src in sorted(self.source.items())
-            if src == "default"
+            if src in ("default", "clamped")
         ]
 
 
-def _dominant(levels: np.ndarray, rel: np.ndarray, j: int) -> np.ndarray:
-    others = np.delete(rel, j, axis=0)
-    loudest_other = others.max(axis=0) if others.size else np.full(rel.shape[1], -np.inf)
-    return (rel[j] >= DOMINANT_REL_DB) & (rel[j] - loudest_other >= DOMINANCE_MARGIN_DB)
+def _enforce_pair_sum(
+    matrix: np.ndarray, source: dict[tuple[int, int], CouplingSource] | None = None
+) -> None:
+    """``C[i][j] + C[j][i]`` is the two acoustic paths (gains cancel), so clearly negative.
+
+    A participant who hardly speaks can make the estimate of their voice pick up the
+    reverse path (about ``-C[j][i]``); clamp the larger value of each pair so the sum
+    stays at most ``PAIR_SUM_MAX_DB``, and mark it.
+    """
+    n = matrix.shape[0]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if matrix[i, j] + matrix[j, i] > PAIR_SUM_MAX_DB:
+                hi, lo = ((i, j), (j, i)) if matrix[i, j] >= matrix[j, i] else ((j, i), (i, j))
+                matrix[hi] = PAIR_SUM_MAX_DB - matrix[lo]
+                if source is not None:
+                    source[hi] = "clamped"
+
+
+def lowest_peak(diff: np.ndarray, min_mass: int) -> float | None:
+    """Lowest smoothed histogram peak (1 dB bins) holding at least ``min_mass`` frames.
+
+    Returns the frame-weighted mean of the raw values around that peak.
+    """
+    edges = np.arange(-80.0, 81.0, 1.0)
+    hist, _ = np.histogram(diff, bins=edges)
+    half = PEAK_SMOOTH_BINS // 2
+    smooth = np.convolve(hist, np.ones(PEAK_SMOOTH_BINS), mode="same")
+    k = 1
+    while k < len(smooth) - 1:
+        if smooth[k] > smooth[k - 1]:
+            end = k
+            while end + 1 < len(smooth) and smooth[end + 1] == smooth[k]:
+                end += 1
+            centre = (k + end) // 2
+            if (end + 1 >= len(smooth) or smooth[end + 1] < smooth[k]) and smooth[
+                centre
+            ] >= min_mass:
+                lo, hi = edges[max(0, centre - half)], edges[min(len(edges) - 1, centre + half + 1)]
+                near = diff[(diff >= lo) & (diff < hi)]
+                return float(near.mean()) if near.size else float(edges[centre] + 0.5)
+            k = end + 1
+        else:
+            k += 1
+    return None
 
 
 def estimate_coupling(
@@ -82,46 +126,39 @@ def estimate_coupling(
     *,
     min_frames: int,
     default_db: float,
-    margin_db: float = DOMINANCE_MARGIN_DB,
 ) -> Coupling:
-    """Median level difference on frames where exactly one track clearly dominates.
+    """Per ordered pair (mic i, voice j): the lowest peak of ``E_i - E_j`` while j is active.
 
-    One refinement pass uses the first estimate to find frames that only the speaker
-    owns (a close neighbour's strong bleed can hide dominance on relative levels alone).
+    On frames where mic j is clearly above its noise, ``E_i - E_j`` clusters at
+    ``C[i][j]`` (j speaking), at ``-C[j][i]`` (i speaking, heard on j) and at third-party
+    values in between; the lowest significant cluster is j's voice. Measured on clip01,
+    where a level-relative "j is speaking" test failed for low-gain and silent mics.
+    Pairs with too few active frames or no clear peak use ``default_db``; pair sums are
+    then kept physically plausible.
     """
     n = len(speakers)
-    rel = levels - np.array([[speech_level(row)] for row in levels], dtype=np.float32)
     matrix = np.zeros((n, n), dtype=np.float64)
     frames = np.zeros((n, n), dtype=np.int64)
     source: dict[tuple[int, int], CouplingSource] = {}
-
-    def fill(masks: list[np.ndarray]) -> None:
-        for j in range(n):
-            for i in range(n):
-                if i == j:
-                    continue
-                m = masks[j]
-                count = int(m.sum())
-                frames[i, j] = count
-                if count >= min_frames:
-                    matrix[i, j] = float(np.median(levels[i, m] - levels[j, m]))
-                    source[(i, j)] = "auto"
-                else:
-                    matrix[i, j] = default_db
-                    source[(i, j)] = "default"
-
-    fill([_dominant(levels, rel, j) for j in range(n)])
-    if n > 1:
-        refined = []
-        for j in range(n):
-            # j speaks and owns the frame, and every other track is explained by j's bleed.
-            m = rel[j] >= DOMINANT_REL_DB
-            for k in range(n):
-                if k != j:
-                    m &= levels[j] >= levels[k] + matrix[j, k] + margin_db
-                    m &= levels[k] < levels[j] + matrix[k, j] + margin_db
-            refined.append(m)
-        fill(refined)
+    for j in range(n):
+        active = levels[j] >= noise_level(levels[j]) + ACTIVE_ABOVE_NOISE_DB
+        count = int(active.sum())
+        for i in range(n):
+            if i == j:
+                continue
+            frames[i, j] = count
+            peak = (
+                lowest_peak(levels[i, active] - levels[j, active], PEAK_MIN_FRAMES)
+                if count >= min_frames
+                else None
+            )
+            if peak is None:
+                matrix[i, j] = default_db
+                source[(i, j)] = "default"
+            else:
+                matrix[i, j] = peak
+                source[(i, j)] = "auto"
+    _enforce_pair_sum(matrix, source)
     return Coupling(list(speakers), matrix, frames, source)
 
 

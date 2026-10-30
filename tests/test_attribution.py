@@ -137,3 +137,25 @@ def test_overlap_needs_both_owned():
     t = Transcript(segments=[seg("gm", 1, 4), seg("anna", 2, 5, "más szöveg itt")])
     out = mark_overlaps(t, own({"gm": [(1, 4)]}))
     assert [s.overlap for s in out.segments] == [False, False]
+
+
+def test_own_interjection_with_other_text_is_not_bleed():
+    # gm talks; anna's short "várj" on her own mic is quiet (low ownership) but its text is
+    # not gm's: no text evidence, so it is kept
+    out = run(
+        [seg("gm", 0, 4, "átkelünk a folyón hajnalban"), seg("anna", 1, 1.4, "várj")],
+        own({"gm": [(0, 4)]}),
+    )
+    anna = [s for s in out.segments if s.speaker == "anna"]
+    assert anna and LOW_OWNERSHIP in anna[0].quality_flags and not out.suppressed
+
+
+def test_third_person_heard_on_two_mics_is_flagged_not_removed():
+    # someone whose own mic missed it: gm's and anna's mics both "own" the same sentence
+    text = "nem megyek veletek a barlangba"
+    out = run(
+        [seg("gm", 1, 3, text), seg("anna", 1.1, 3.1, text)],
+        own({"gm": [(1, 3)], "anna": [(1.1, 3.1)]}),
+    )
+    assert len(out.segments) == 2 and not out.suppressed
+    assert all(POSSIBLE_DUPLICATE in s.quality_flags for s in out.segments)
