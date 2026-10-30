@@ -350,12 +350,14 @@ def _run_session(
     gaps = list(gaps) or session.gaps()  # the recorder manifest unless given explicitly
     transcript = merge_tracks(tracks, settings.quality, gaps)
     coupling_db: list[list[float]] | None = None
+    silent_mics: list[str] = []
     if settings.bleed.mode != "off":
         ownership = early or compute_ownership(session, settings, cache)
         for warning in ownership.warnings:
             recording_sink(WarningEvent("bleed", warning))
         transcript = apply_bleed_handling(transcript, ownership, settings.bleed, settings.dedup)
         coupling_db = ownership.coupling.to_json()
+        silent_mics = list(ownership.silent)
         stats.bleed_suppressed = sum(s.suppression_reason == "bleed" for s in transcript.suppressed)
         stats.duplicates = sum(s.suppression_reason == "duplicate" for s in transcript.suppressed)
     for seg in transcript.segments:
@@ -377,6 +379,7 @@ def _run_session(
         processing_events=events,
         bleed_mode_applied=settings.bleed.mode,
         coupling_db=coupling_db,
+        silent_mics=silent_mics,
     )
     return result, stats
 

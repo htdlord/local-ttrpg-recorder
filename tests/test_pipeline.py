@@ -168,10 +168,11 @@ def test_fast_preset_oom_fallback_in_pipeline(tmp_path, monkeypatch):
     warnings = []
 
     def sink(event):
-        if isinstance(event, WarningEvent):
+        if isinstance(event, WarningEvent) and event.stage == "asr":
             warnings.append(event)
 
     result, _ = run(session, load_settings(preset="fast"), factory=OomFactory(1, sizes), sink=sink)
     assert sizes == [4, 2, 1] and len(warnings) == 2
-    assert [e["kind"] for e in result.processing_events] == ["warning", "warning"]
+    asr_events = [e for e in result.processing_events if e.get("stage") == "asr"]
+    assert [e["kind"] for e in asr_events] == ["warning", "warning"]
     assert result.batch_sizes == [1]

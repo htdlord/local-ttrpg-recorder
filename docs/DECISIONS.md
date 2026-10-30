@@ -462,9 +462,46 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 ### Open tasks (M3)
 
 - [ ] clip02: triage, `bench bleed`, fix tolerances and defaults (including overlap, which clip01 cannot test).
-- [ ] Bleed from participants whose own mic records nothing (clip01 `seat_2`/`seat_4`): consider keeping one copy, reassigned, and marking the other as its duplicate. Needs data on how often this happens and an owner decision.
+- [x] ~~Bleed from participants whose own mic records nothing.~~ Decided and implemented, see "Silent mics" below.
 - [ ] The weak-pair warning is noisy for sessions with silent mics: count pairs whose voice actually speaks.
 
+## 2026-10-30 – Silent mics (owner decisions after M3 phase C)
+
+1. **The residual-duplicate metric is split by the labelled source mic:** working vs silent or near-silent. Tolerance 4 (residual duplicates at least halved) is measured on **working source mics only**.
+   - A mic is *silent* when its speech level (95th percentile of active frames) is within `bleed.silent_mic_range_db` (10 dB) of its noise level.
+   - On clip01 the silent mics are `seat_2` and `seat_4`. `seat_1` (speech −50 dBFS, noise −64) counts as working: quiet, but its wearer's own speech is on it.
+   - Silent mics are reported as a warning and in the JSON (`silent_mics`).
+2. **Speech of a silent mic's wearer (owner decision):** if the same text is on two other tracks, one copy stays, on the louder track, flagged `possible_wrong_speaker` with `probable_speaker = "unknown"`; the other becomes its duplicate.
+   - Loudness cannot identify the wearer, so there is **no automatic reassignment** to the silent mic's owner. The M4 GUI makes it reassignable by hand.
+   - As implemented, the rule applies when all of these hold:
+     - the session has a silent mic;
+     - the text is longer (≥ `min_words`), and the two copies are on two non-silent tracks;
+     - the ownership evidence rules leave the pair unresolved;
+     - **both copies are at least 20 dB below their tracks' speech levels**, i.e. neither wearer is speaking normally.
+   - "Louder" is the level relative to the track's own speech level, which is independent of gain.
+   - The −20 dB limit comes from clip01:
+     - with −6 dB, the rule removed a quiet own utterance (−15 dB relative);
+     - own speech (`s`) lies between −18.3 and +5 dB;
+     - bleed copies of silent sources lie between −27 and −16 dB;
+     - provisional until clip02.
+3. **M5 mic check:** it raises an alarm when an assigned channel has no signal, or a suspiciously quiet one, compared with its noise and with the other channels (SPEC §8.1, §13 M5).
+
+### clip01 after these changes
+
+`bench bleed`; recall and false suppression over 39 speech units; bleed: 21 units from working sources, 13 from silent ones.
+
+| variant | recall % | false suppr. % | residual, working source % | residual, silent source % |
+|---|---|---|---|---|
+| off | 100.0 | 0.0 | 100.0 | 100.0 |
+| post m6 s0.3 | 100.0 | 0.0 | 81.0 | 92.3 |
+| **post m6 s0.5 (default)** | **100.0** | **0.0** | **76.2** | **92.3** |
+| post m9 s0.5 | 94.9 | 5.1 | 61.9 | 92.3 |
+| pre a18 | 97.4 | 0.0 | 95.2 | 92.3 |
+
+- **The default still does not meet tolerance 4 on working sources** (76 % instead of ≤ 50 %).
+- The remaining residue is mostly the strongly coupled GM ↔ `seat_3` pair; margin 9 dB reaches 62 % but loses two speech units.
+- The silent-source residue barely moves: only one pair satisfies the conservative third-party rule.
+- Re-measure on clip02.
 ## 2026-10-30 – M5 recorder (CLI first)
 
 - **CLI first** (`sessionscribe record …`), so the next session can already be recorded with it. The M4 GUI Record tab will use the same `core.audio.recorder` API and its events (`LevelEvent`, `RecorderAlarm`, `RecorderStatus`).
