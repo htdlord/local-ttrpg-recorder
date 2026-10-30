@@ -74,6 +74,8 @@ Benchmarks run against local reference clips, which are personal data and git-ig
 ```bash
 uv run sessionscribe bench run --refs bench/refs --matrix m1   # writes work/bench/<run>/results.md
 uv run sessionscribe bench score work/bench/<run>              # re-score without ASR
+uv run sessionscribe bench ref triage bench/refs/clip01         # label segments by ear (M3)
+uv run sessionscribe bench triage score bench/refs/clip01 out.json
 ```
 
 CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
