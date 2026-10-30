@@ -22,6 +22,8 @@ ref_app = typer.Typer(
 )
 bench_app.add_typer(clip_app, name="clip")
 bench_app.add_typer(ref_app, name="ref")
+triage_app = typer.Typer(help="Score session outputs against triage labels.", no_args_is_help=True)
+bench_app.add_typer(triage_app, name="triage")
 
 ClipArg = Annotated[
     Path, typer.Argument(help="Clip folder, e.g. bench/refs/clip01.", file_okay=False)
@@ -519,3 +521,51 @@ def bench_score(
         raise _fail(f"{run_dir / 'results.json'} not found")
     score_run(run_dir, _clips(refs, clip, allow_draft))
     typer.echo(f"{run_dir / 'results.md'}")
+
+
+@triage_app.command("score")
+def triage_score(
+    folder: ClipArg,
+    output: Annotated[
+        Path, typer.Argument(help="Session output JSON of this clip.", exists=True, dir_okay=False)
+    ],
+) -> None:
+    """Recall, false suppression, residual duplicates, overlap and more (numbers only)."""
+    from sessionscribe.core.bench.triage import read_triage, triage_path
+    from sessionscribe.core.bench.triage_metrics import score_triage
+
+    clip = _load_clip(folder)
+    path = triage_path(clip)
+    if not path.is_file():
+        raise _fail(f"{path} not found; label the clip with 'bench ref triage' first")
+    triage = read_triage(path)
+    if triage.status != "complete":
+        typer.echo(
+            typer.style("[WARN]", fg=typer.colors.YELLOW, bold=True)
+            + f" triage is incomplete ({sum(u.label is None for u in triage.units)} unlabelled)",
+            err=True,
+        )
+    data = json.loads(output.read_text(encoding="utf-8"))
+    score = score_triage(triage, data)
+
+    def pct(value: float | None) -> str:
+        return "n/a" if value is None else f"{100 * value:.1f} %"
+
+    typer.echo(f"bleed mode applied: {data.get('bleed_mode_applied', 'unknown')}")
+    typer.echo(f"labelled units: {score.labelled} ({score.unsure} unsure, not scored)")
+    typer.echo(
+        f"speech (s/w/v/o, {score.speech_units}): recall {pct(score.speech_recall)} "
+        f"(by time {pct(score.speech_recall_s)}), false suppression "
+        f"{pct(score.false_suppression)}, absent {score.speech_absent}"
+    )
+    typer.echo(
+        f"bleed (b, {score.bleed_units}): residual duplicates {pct(score.residual_duplicates)}"
+    )
+    typer.echo(
+        f"overlap (o, {score.overlap_units}): kept {pct(score.overlap_kept)}, "
+        f"marked {pct(score.overlap_marked)}"
+    )
+    typer.echo(f"no speech (n, {score.no_speech_units}): kept {pct(score.hallucination_residue)}")
+    typer.echo(
+        f"wrong speaker (w, {score.wrong_speaker_units}): attributed {pct(score.attribution)}"
+    )

@@ -135,3 +135,29 @@ def test_real_playback_of_a_short_tone():
     )
     time.sleep(0.3)
     player.stop()
+
+
+def test_triage_score_command(tmp_path, fake_pipeline):
+    clip = make_clip(tmp_path)
+    runner.invoke(app, ["bench", "ref", "triage", str(clip.folder), "--stats"])
+    triage = t.read_triage(t.triage_path(clip))
+    for u, label in zip(triage.units, ["s", "b", "s"], strict=True):
+        u.label = label
+    t.write_triage(t.triage_path(clip), triage)
+    out = tmp_path / "out.json"
+    out.write_text(
+        json.dumps(
+            {
+                "bleed_mode_applied": "off",
+                "segments": [
+                    {"id": u.id, "speaker": u.speaker, "start": u.start, "end": u.end}
+                    for u in triage.units
+                ],
+                "suppressed": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["bench", "triage", "score", str(clip.folder), str(out)])
+    assert result.exit_code == 0, result.output
+    assert "recall 100.0 %" in result.output and "residual duplicates 100.0 %" in result.output
