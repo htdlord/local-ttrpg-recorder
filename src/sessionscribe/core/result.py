@@ -40,6 +40,7 @@ class SessionResult:
     processing_events: list[dict[str, Any]] = field(default_factory=list)
     bleed_mode_applied: str = "off"
     coupling_db: list[list[float]] | None = None  # participant order, C[i][j] dB
+    silent_mics: list[str] = field(default_factory=list)  # record (almost) nothing
 
     def name_of(self, participant_id: str) -> str:
         for p in self.participants:

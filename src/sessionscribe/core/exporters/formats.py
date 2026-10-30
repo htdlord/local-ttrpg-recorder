@@ -185,6 +185,7 @@ def to_json(result: SessionResult) -> dict[str, Any]:
             for p in result.participants
         ],
         "coupling_db": result.coupling_db,
+        "silent_mics": result.silent_mics,
         "recording_gaps": [
             {
                 "start_sample": g.start,

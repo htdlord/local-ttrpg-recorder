@@ -24,6 +24,7 @@ from sessionscribe.core.pipeline.coupling import (
     estimate_coupling,
     manual_coupling,
     noise_level,
+    speech_level,
 )
 from sessionscribe.core.pipeline.features import frame_samples, track_envelope
 from sessionscribe.core.session import Session
@@ -39,6 +40,15 @@ def track_floors(levels: np.ndarray, above_noise_db: float) -> np.ndarray:
     few dB above its noise, and a cap below it let the track own almost every frame.
     """
     return np.array([noise_level(row) + above_noise_db for row in levels], dtype=np.float32)
+
+
+def silent_mics(speakers: list[str], levels: np.ndarray, range_db: float) -> list[str]:
+    """Tracks whose speech level is within ``range_db`` of their noise level."""
+    return [
+        s
+        for s, row in zip(speakers, levels, strict=True)
+        if speech_level(row) - noise_level(row) < range_db
+    ]
 
 
 def hold_forward(mask: np.ndarray, frames: int) -> np.ndarray:
@@ -79,6 +89,11 @@ class Ownership:
     floors: list[float]
     key: str = ""
     warnings: list[str] = field(default_factory=list)
+    # Mics whose speech level stays within ``silent_mic_range_db`` of their noise: they
+    # record (almost) nothing of their wearer, whose voice exists only as bleed elsewhere.
+    silent: list[str] = field(default_factory=list)
+    # Levels relative to each track's speech level (n x frames), for comparing copies.
+    relative: np.ndarray | None = None
 
     def index(self, speaker: str) -> int:
         return self.speakers.index(speaker)
@@ -92,6 +107,16 @@ class Ownership:
         a, b = self.frames(start, end)
         row = self.masks[self.index(speaker), a:b]
         return float(row.mean()) if row.size else 0.0
+
+    def relative_level(self, speaker: str, start: int, end: int) -> float:
+        """Mean level over ``[start, end)`` relative to the track's speech level (dB)."""
+        if self.relative is None:
+            return 0.0
+        a, b = self.frames(start, end)
+        part = self.relative[self.index(speaker), a:b]
+        if not part.size:
+            return -120.0
+        return float(10 * np.log10(np.mean(np.power(10.0, part.astype(np.float64) / 10))))
 
     def owned_mask(self, speaker: str, start: int, end: int) -> np.ndarray:
         a, b = self.frames(start, end)
@@ -110,6 +135,7 @@ def _key_fields(session: Session, settings: Settings, fingerprints: list[str]) -
         "floor_above_noise_db": b.floor_above_noise_db,
         "coupling_min_frames": b.coupling_min_frames,
         "coupling_default_db": b.coupling_default_db,
+        "silent_mic_range_db": b.silent_mic_range_db,
         "mic_check": {k: list(v) for k, v in sorted(session.config.mic_check.items())},
         "coupling_db": session.config.coupling_db,
         "attribution_version": ATTRIBUTION_VERSION,
@@ -126,6 +152,11 @@ def compute_ownership(session: Session, settings: Settings, cache: Cache | None)
         "ownership",
         _key_fields(session, settings, [t.fingerprint() + f"@{t.samplerate}" for t in tracks]),
     )
+    envs = [track_envelope(t, cache, b.frame_ms) for t in tracks]
+    shifts = [round(p.offset_samples / frame) for p in session.participants]
+    levels = align(envs, shifts)
+    silent = silent_mics(speakers, levels, b.silent_mic_range_db)
+    relative = (levels - np.array([[speech_level(r)] for r in levels])).astype(np.float32)
     if cache is not None:
         meta = cache.load_json(key)
         packed = cache.load_array(key)
@@ -144,12 +175,16 @@ def compute_ownership(session: Session, settings: Settings, cache: Cache | None)
                 meta["floors"],
                 key.short,
                 meta.get("warnings", []),
+                silent,
+                relative,
             )
 
-    envs = [track_envelope(t, cache, b.frame_ms) for t in tracks]
-    shifts = [round(p.offset_samples / frame) for p in session.participants]
-    levels = align(envs, shifts)
     warnings: list[str] = []
+    if silent:
+        warnings.append(
+            f"mic(s) {', '.join(silent)} record almost nothing above their noise; "
+            "their wearers' speech only exists as bleed on other tracks"
+        )
     if b.coupling == "manual":
         if session.config.coupling_db is None:
             raise ValueError("bleed.coupling = manual needs coupling_db in the session file")
@@ -179,7 +214,15 @@ def compute_ownership(session: Session, settings: Settings, cache: Cache | None)
     hold = round(b.hold_ms / b.frame_ms)
     masks = ownership_masks(levels, coupling.matrix, floors, b.ownership_margin_db, hold)
     result = Ownership(
-        speakers, frame, masks, coupling, [round(float(f), 2) for f in floors], key.short, warnings
+        speakers,
+        frame,
+        masks,
+        coupling,
+        [round(float(f), 2) for f in floors],
+        key.short,
+        warnings,
+        silent,
+        relative,
     )
     if cache is not None:
         cache.store_array(key, np.packbits(masks, axis=1))

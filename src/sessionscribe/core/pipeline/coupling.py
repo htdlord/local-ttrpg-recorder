@@ -19,6 +19,7 @@ from sessionscribe.core.pipeline.features import SILENCE_DB
 
 ACTIVE_DB = -60.0  # frames above this count when estimating a track's speech level
 NOISE_ACTIVE_DB = -100.0  # frames above this (not digital silence) count for the noise level
+DIGITAL_SILENCE_SHARE = 0.2  # at most this share above it: the track is digital silence
 DOMINANT_REL_DB = -6.0  # speaking: within this of its own speech level
 ACTIVE_ABOVE_NOISE_DB = 15.0  # mic j "active": this far above its own noise level
 PEAK_MIN_FRAMES = 50  # a histogram peak needs at least 1 s of frames
@@ -40,8 +41,8 @@ def speech_level(env: np.ndarray) -> float:
 def noise_level(env: np.ndarray) -> float:
     """A track's noise floor: 10th percentile of frames that are not digital silence."""
     active = env[env > NOISE_ACTIVE_DB]
-    if active.size == 0:
-        return SILENCE_DB
+    if active.size <= DIGITAL_SILENCE_SHARE * env.size:
+        return NOISE_ACTIVE_DB  # mostly digital silence (synthetic or gated): no real noise
     return float(np.percentile(active, 10))
 
 

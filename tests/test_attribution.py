@@ -159,3 +159,57 @@ def test_third_person_heard_on_two_mics_is_flagged_not_removed():
     )
     assert len(out.segments) == 2 and not out.suppressed
     assert all(POSSIBLE_DUPLICATE in s.quality_flags for s in out.segments)
+
+
+def own_with_silent(spans, silent, relative=None, seconds=20):
+    o = own(spans, seconds)
+    o.silent = list(silent)
+    if relative is not None:
+        rel = np.full(o.masks.shape, -30.0, np.float32)
+        for spk, (a, b, db) in relative.items():
+            rel[SPK.index(spk), int(a * 50) : int(b * 50)] = db
+        o.relative = rel
+    return o
+
+
+def test_silent_mic_third_person_keeps_louder_copy_as_unknown_speaker():
+    # bela's mic records nothing; his sentence is heard on gm's and anna's mics
+    text = "nem megyek veletek a barlangba"
+    owned = own_with_silent(
+        {"gm": [(1, 3)], "anna": [(1.1, 3.1)]},
+        silent=["bela"],
+        relative={"gm": (1, 3, -26.0), "anna": (1.1, 3.1, -21.0)},  # louder on anna's mic
+    )
+    out = run([seg("gm", 1, 3, text), seg("anna", 1.1, 3.1, text)], owned)
+    (kept,) = out.segments
+    assert kept.speaker == "anna" and POSSIBLE_WRONG_SPEAKER in kept.quality_flags
+    assert kept.probable_speaker == "unknown"  # no automatic reassignment to bela
+    (dup,) = out.suppressed
+    assert dup.speaker == "gm" and dup.suppression_reason == "duplicate"
+    assert dup.duplicate_of == kept.id
+
+
+def test_without_a_silent_mic_both_copies_stay_flagged():
+    text = "nem megyek veletek a barlangba"
+    owned = own_with_silent({"gm": [(1, 3)], "anna": [(1.1, 3.1)]}, silent=[])
+    out = run([seg("gm", 1, 3, text), seg("anna", 1.1, 3.1, text)], owned)
+    assert len(out.segments) == 2 and not out.suppressed
+
+
+def test_silent_mic_rule_leaves_short_words_alone():
+    owned = own_with_silent({"gm": [(1, 1.4)], "anna": [(1.1, 1.5)]}, silent=["bela"])
+    out = run([seg("gm", 1, 1.4, "nem"), seg("anna", 1.1, 1.5, "nem")], owned)
+    assert len(out.segments) == 2 and not out.suppressed
+
+
+def test_silent_mic_rule_skips_pairs_where_one_wearer_speaks():
+    # anna's copy is at her normal speaking level: she said it; gm's is bleed
+    text = "nem megyek veletek a barlangba"
+    owned = own_with_silent(
+        {"gm": [(1, 3)], "anna": [(1.1, 3.1)]},
+        silent=["bela"],
+        relative={"gm": (1, 3, -16.0), "anna": (1.1, 3.1, -1.0)},
+    )
+    out = run([seg("gm", 1, 3, text), seg("anna", 1.1, 3.1, text)], owned)
+    assert len(out.segments) == 2 and not out.suppressed
+    assert all(POSSIBLE_DUPLICATE in s.quality_flags for s in out.segments)

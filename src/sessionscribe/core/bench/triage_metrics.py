@@ -60,6 +60,12 @@ class TriageScore:
     bleed_units: int
     residual_duplicates: float | None  # b kept
     residual_flagged: float | None  # b kept but flagged for review (duplicate/ownership)
+    # Split by the labelled source (owner decision): tolerance 4 is measured on working
+    # source mics; a silent source mic's voice only exists as bleed.
+    bleed_units_working: int
+    residual_duplicates_working: float | None
+    bleed_units_silent: int
+    residual_duplicates_silent: float | None
     overlap_units: int
     overlap_kept: float | None  # o kept
     overlap_marked: float | None  # o kept and marked overlap
@@ -72,7 +78,10 @@ class TriageScore:
         return asdict(self)
 
 
-def score_triage(triage: TriageFile, output: Mapping[str, Any]) -> TriageScore:
+def score_triage(
+    triage: TriageFile, output: Mapping[str, Any], silent_mics: Sequence[str] | None = None
+) -> TriageScore:
+    """``silent_mics`` defaults to the output's own list (empty with bleed handling off)."""
     units = [u for u in triage.units if u.label is not None]
     scored = [u for u in units if u.label != "?"]
     where = {u.id: locate(u, output) for u in scored}
@@ -85,6 +94,9 @@ def score_triage(triage: TriageFile, output: Mapping[str, Any]) -> TriageScore:
 
     speech = group(*SPEECH)
     bleed, overlap, nospeech, wrong = group("b"), group("o"), group("n"), group("w")
+    silent = set(output.get("silent_mics") or () if silent_mics is None else silent_mics)
+    bleed_silent = [u for u in bleed if u.source in silent]
+    bleed_working = [u for u in bleed if u.source not in silent]
     kept_s = sum(u.duration for u in speech if where[u.id][0] == "kept")
     marked = sum(
         where[u.id][0] == "kept" and bool((where[u.id][1] or {}).get("overlap")) for u in overlap
@@ -105,6 +117,10 @@ def score_triage(triage: TriageFile, output: Mapping[str, Any]) -> TriageScore:
         speech_absent=count(speech, "absent"),
         bleed_units=len(bleed),
         residual_duplicates=_rate(count(bleed, "kept"), len(bleed)),
+        bleed_units_working=len(bleed_working),
+        residual_duplicates_working=_rate(count(bleed_working, "kept"), len(bleed_working)),
+        bleed_units_silent=len(bleed_silent),
+        residual_duplicates_silent=_rate(count(bleed_silent, "kept"), len(bleed_silent)),
         residual_flagged=_rate(
             sum(
                 where[u.id][0] == "kept"
