@@ -120,7 +120,7 @@ See §6.2 for the algorithm.
 - `formats`: `txt`, `srt`, `vtt`, `json`, `md`.
 - `timestamp_style` for txt/md: `hh:mm:ss` | `hh:mm:ss.mmm`. SRT/VTT always use their own millisecond formats.
 - `merge_same_speaker_gap_s` (txt/md only), filename template.
-- Session file `session.toml`: `name`, `date`, optional `preset` and `[settings]` (layered after `--config`), `[[participants]]` with `id`, `name`, `source` (file or folder of segment files, relative to the session), `channel`, `offset_s` (≥ 0), `color`. `session init FOLDER` suggests one from file names.
+- Session file `session.toml`: `name`, `date`, optional `preset` and `[settings]` (layered after `--config`), `[[participants]]` with `id`, `name`, `source` (file or folder of segment files, relative to the session), `channel`, `offset_s` (≥ 0), `color`; optional `[[reassignments]]` (`segment` id → participant `to`, set by hand in the GUI or with `reassign`). `session init FOLDER` suggests one from file names.
 - Chunking (`asr.chunk_owned_s` 600, `asr.chunk_context_s` 5, `asr.chunk_boundary_search_s` 15) and quality-flag thresholds (`[quality]`) are settings; see §5.1 and §5.6.
 
 ## 4. Time model
@@ -229,7 +229,9 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
   // also: "bleed_mode_applied", "chunks" (owned/context ranges, cache key, cached),
   // "vad_intervals" per participant, "processing_events" (worker crashes, retries, warnings);
   // "possible_missed_speech" (VAD speech without words, for review);
-  // per segment "boundary_trimmed_words". audio_start_sample is track-local, start/end session time.
+  // per segment "boundary_trimmed_words" and, after a manual reassignment, "reassigned_from"
+  // (+ quality flag "reassigned"; the speaker's audio_start_sample stays on the original track).
+  // audio_start_sample is track-local, start/end session time.
 }
 ```
 
@@ -274,6 +276,8 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
 Tabs: **Session**, **Record**, **Settings** (Basic / Advanced, mode-aware disabling), **Run** (progress, ETA, log, cancel/resume), **Result**.
 
 Result view: colour-coded transcript; filter for flagged / overlap / suppressed items; clicking a line plays that time range from the original track (QtMultimedia); recording gaps shown inline. No text editing in v1.
+
+Manual reassignment: any kept segment (typically `possible_wrong_speaker`, including `probable_speaker = "unknown"`) can be moved to another participant and back. It is stored in `session.toml` as `[[reassignments]]` (segment id → participant, no transcript text), applied in the core after bleed handling, and re-exported from the cache without ASR. The moved segment keeps its other flags and gains `reassigned` + `reassigned_from`. Unknown segment ids (e.g. after settings changed the segmentation) give a warning, never an error. Restoring a suppressed item is a later feature.
 
 Dark/light theme; English + Hungarian UI; "System check" runs `doctor`.
 
@@ -327,7 +331,7 @@ Bleed handling is always compared against `bleed_mode=off` on the same clips.
 | M1 | Single-file ASR CLI, full settings model, presets, both ASR modes with mode-aware params, VAD preset, initial_prompt/hotwords pass-through; bench harness; reference clips prepared | Regression test confirms batched-mode parameter behaviour; benchmark matrix (large-v3 / turbo × float16 / int8_float16 × batch 4/8/16 × word ts × mode) recorded on a HU clip; default mode confirmed |
 | M2 | Multi-track: participants, offsets, time model, chunking with owned/context ranges, layered cache, merge, all exporters, quality flags | Chunk-boundary tests pass; re-export / rename / offset change (post mode) without re-ASR; stable segment ids; 8 synthetic tracks + real clips merge correctly; a crashing worker process (simulated) is detected, its chunk re-run once from the cache, a second crash gives a clear error with the cache left consistent (§5.7) |
 | M3 | **Prerequisite:** `bench ref triage` and complete triage references (§11.1) for clip01 and the ≥ 5 min clip(s); M1 benchmark repeated on the ≥ 5 min clip. Then: coupling (auto + guided), ownership, post/pre modes, dedup with evidence rules, overlap marking | On the triage reference set vs `off`: speech recall does not drop beyond an agreed tolerance, no hand-marked overlap is lost silently, residual duplicates substantially reduced; tolerances fixed from first measurements and written to DECISIONS |
-| M4 | GUI: Session, Settings, Run, Result (review + playback), i18n, themes | Full workflow A from GUI; cancel + resume; flagged items reviewable; a `possible_wrong_speaker` segment (incl. `probable_speaker = "unknown"`) can be reassigned to a participant by hand, without re-ASR |
+| M4 | GUI: Session, Settings, Run, Result (review + playback), i18n, themes; Record tab in a second step (detached recorder process, file-based status) | Full workflow A from GUI; cancel + resume; flagged items reviewable; a `possible_wrong_speaker` segment (incl. `probable_speaker = "unknown"`) can be reassigned to a participant by hand, without re-ASR |
 | M5 | Recorder: device/channel browser with explicit device + host API selection saved in the manifest (§8.1), meters, guided mic check with alarms for assigned channels without signal or suspiciously quiet, segmented writer, manifest, recovery | 8 h, 8-ch recording on reference machine without loss; mic check alarms on a muted/unplugged and on a very low-gain assigned channel (tested); fault injection: device unplug, low disk, slowed disk writes, process kill → manifest correctly reports what exists and what is missing; restart recovery works |
 | M6 | Release: README (EN + HU summary), supported-configuration matrix, licence notices, install tests on Windows and Linux, optional one-dir build | Fresh install on both OSes following README succeeds; on a clean environment **without system CUDA/cuDNN in PATH** the `cuda` extra alone is sufficient (`doctor` passes incl. real CUDA inference) |
 

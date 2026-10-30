@@ -101,6 +101,32 @@ time range where only they speak) enables `bleed.coupling = "guided"`.
 CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
 (`uv sync --extra cuda`) or a system CUDA/cuDNN; `doctor` shows where each library was found.
 
+### Desktop app
+
+The GUI is an optional extra (PySide6, LGPLv3, dynamically linked):
+
+```bash
+uv sync --extra gui          # combine with --extra cuda as needed
+uv run sessionscribe-gui
+```
+
+Tabs: **Session** (create from a folder or open `session.toml`, edit participants),
+**Settings** (preset, basic settings, generated advanced form; settings with no effect in
+the chosen ASR mode are disabled), **Run** (progress, ETA, cancel; running again resumes
+from the cache; export only), **Result** (filters, playback from the original track,
+reassigning a segment to another participant without re-ASR). The interface is English
+or Hungarian and follows the system light/dark theme unless set under *View*. Manual
+reassignment also works from the CLI:
+
+```bash
+uv run sessionscribe reassign --session recordings/2026-10-29 --segment p2-c004-0003 --to p5
+uv run sessionscribe reassign --session recordings/2026-10-29 --segment p2-c004-0003 --undo
+```
+
+Translations: after changing GUI strings run
+`pyside6-lupdate <gui .py files> -ts src/sessionscribe/gui/i18n/sessionscribe_hu.ts`,
+translate, then `pyside6-lrelease` to the `.qm` next to it (a test checks completeness).
+
 ## Privacy
 
 Participants' voices are personal data. Whoever records a session is responsible
