@@ -605,7 +605,12 @@ class Recorder:
         if self.manifest.segments:  # resumed session: the time in between is a gap
             self._gap(0, "process_killed", estimated=True)
         inhibitor = self.inhibit() if self.inhibit else None
-        stream = self.opener.open(self.engine.callback)
+        try:
+            stream = self.opener.open(self.engine.callback)
+        except BaseException:
+            if inhibitor is not None:
+                inhibitor.release()
+            raise
         self.manifest.actual_samplerate = float(
             getattr(stream, "samplerate", self.config.samplerate)
         )

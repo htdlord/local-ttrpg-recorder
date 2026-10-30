@@ -83,3 +83,10 @@ def test_plan_turns():
         (18.5, 23),
     ]
     assert plan_turns(PARTS, 0, 4)[0] is None
+
+
+def test_no_audio_is_a_clear_error():
+    import pytest
+
+    with pytest.raises(ValueError, match="no audio"):
+        analyze([], CHANNELS, PARTS, [], None)

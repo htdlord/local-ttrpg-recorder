@@ -72,6 +72,8 @@ def analyze(
     noise_window: tuple[float, float] | None,
 ) -> list[ChannelCheck]:
     """Per-channel levels and alarms from the level events of a mic check."""
+    if not events:
+        raise ValueError("no audio was received during the mic check")
     all_rms = np.asarray([e.rms_dbfs for e in events], dtype=np.float64)
     peaks = np.asarray([e.peak_dbfs for e in events], dtype=np.float64)
     if noise_window is not None and len(_window(events, *noise_window)):

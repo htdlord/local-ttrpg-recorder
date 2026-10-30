@@ -112,6 +112,12 @@ class Meter:
         self.engine = CaptureEngine(n_channels, samplerate, samplerate * 5, opener.columns)
         self.levels = ChannelLevels(n_channels, samplerate)
         self.interval_s = interval_s
+        self.samplerate = samplerate
+        self.frames = 0
+
+    def audio_time(self) -> float:
+        """Seconds of audio read so far (the clock of the level events)."""
+        return self.frames / self.samplerate
 
     def run(
         self,
@@ -130,15 +136,16 @@ class Meter:
                 data = self.engine.ring.read()
                 if data.shape[0]:
                     self.levels.add(data)
+                    self.frames += data.shape[0]
                 now = time.monotonic()
                 if now - last >= self.interval_s:
                     last = now
-                    event = self.levels.take_event(round(now - t0, 3))
+                    event = self.levels.take_event(round(self.audio_time(), 3))
                     if event:
                         on_level(event)
                 if self.engine.fatal:
                     raise AudioSetupError(self.engine.fatal)
-                if seconds is not None and now - t0 >= seconds:
+                if seconds is not None and self.audio_time() >= seconds:
                     break
         finally:
             stream.stop()

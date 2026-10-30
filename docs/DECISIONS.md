@@ -555,6 +555,8 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
   - Tested by killing a recorder child process.
 - **Stopping:** Ctrl+C or `--seconds`. There is no separate `q` key, because Ctrl+C already stops cleanly.
 
+- **ASIO only opens from the main thread** (found in the owner's first test): the UMC ASIO driver is a COM object, and `Pa_OpenStream` from a worker thread without COM fails with "Failed to load ASIO driver". The record CLI therefore runs the stream in the main thread (`Recorder.run`, `Meter.run`); mic check prompts and analysis run in a helper thread. Prompts stop on Ctrl+C or when no audio arrives for 3 s; an open error is reported at once (with a hint about another program holding the driver), and no session file is written. The GUI (M4) must do the same: audio on the thread that initialised PortAudio, or COM initialised on its own.
+
 ### Acceptance still to do (reference machine, owner)
 
 - [ ] `pytest -m audio_hw` with `SESSIONSCRIBE_TEST_DEVICE`, `SESSIONSCRIBE_TEST_HOST_API` and `SESSIONSCRIBE_TEST_CHANNELS` set, on ASIO and WASAPI.

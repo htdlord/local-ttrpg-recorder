@@ -6,6 +6,7 @@ nothing is auto-selected (SPEC §8.1). Explicit flags override the rig.
 
 from __future__ import annotations
 
+import shutil
 import signal
 import sys
 import threading
@@ -135,13 +136,25 @@ def _opener(setup: Setup) -> Any:
         raise _fail(str(exc)) from exc
 
 
-def _level_line(event: Any, setup: Setup, width: int = 8) -> str:
+def _level_line(event: Any, setup: Setup, reserve: int = 0) -> str:
+    """One meter line that fits the terminal, so a carriage return can overwrite it."""
     from sessionscribe.core.audio.live import bar
 
-    parts = []
-    for name, rms, clip in zip(setup.ids, event.rms_dbfs, event.clipped, strict=False):
-        parts.append(f"{name[:6]:>6} {bar(rms, width)}{'!' if clip else ' '}")
-    return " ".join(parts)
+    columns = shutil.get_terminal_size((100, 24)).columns - 1 - reserve
+    n = max(1, len(setup.ids))
+    per = max(6, columns // n)
+    name_w = min(4, max(2, per - 6))
+    bar_w = max(2, per - name_w - 3)
+    parts = [
+        f"{name[:name_w]:>{name_w}} {bar(rms, bar_w)}{'!' if clip else ' '}"
+        for name, rms, clip in zip(setup.ids, event.rms_dbfs, event.clipped, strict=False)
+    ]
+    return " ".join(parts)[: max(0, columns)]
+
+
+def _overwrite(line: str) -> None:
+    columns = shutil.get_terminal_size((100, 24)).columns - 1
+    typer.echo("\r" + line[:columns].ljust(columns), nl=False)
 
 
 @record_app.command("devices")
@@ -157,7 +170,7 @@ def record_devices() -> None:
     typer.echo("Host APIs: " + ", ".join(host_api_names(sd)))
     for d in list_input_devices(sd):
         typer.echo(
-            f"  {d.name!r:42} {d.host_api:22} {d.max_input_channels:3d} ch  "
+            f"  {d.name[:44]!r:46} {d.host_api:20} {d.max_input_channels:3d} ch  "
             f"{d.default_samplerate:.0f} Hz  (index {d.index})"
         )
 
@@ -226,7 +239,7 @@ def record_meters(
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *a: stop.set())
     Meter(opener, len(setup.channels), setup.samplerate).run(
-        seconds, lambda e: typer.echo("\r" + _level_line(e, setup), nl=False), stop
+        seconds, lambda e: _overwrite(_level_line(e, setup)), stop
     )
     typer.echo("")
 
@@ -246,22 +259,55 @@ def _print_checks(checks: list[Any]) -> str:
     return verdict
 
 
-def _prompt_turns(setup: Setup, noise_s: float, turn_s: float, now: Any) -> tuple[Any, Any]:
-    """Print the prompts on time; ``now()`` is the recording/meter time in seconds."""
+STALL_S = 3.0  # no audio time progress for this long: the stream failed
+
+
+def _prompt_turns(
+    setup: Setup, noise_s: float, turn_s: float, now: Any, stop: threading.Event
+) -> tuple[Any, Any] | None:
+    """Print the prompts on time; ``now()`` is the audio time in seconds (frames read).
+
+    Returns None when stopped (Ctrl+C) or when the audio time stops advancing.
+    """
     from sessionscribe.core.audio.mic_check import plan_turns
 
     noise, turns = plan_turns(setup.ids, noise_s, turn_s)
+    last = [time.monotonic(), now()]
+
+    def wait_until(t: float) -> bool:
+        while now() < t:
+            if stop.is_set():
+                return False
+            current = now()
+            if current > last[1]:
+                last[0], last[1] = time.monotonic(), current
+            elif time.monotonic() - last[0] > STALL_S:
+                typer.echo(f"\n{_badge('FAIL')} no audio is arriving; mic check aborted")
+                return False
+            time.sleep(0.05)
+        return True
+
     if noise:
         typer.echo(f"Everyone quiet for {noise_s:.0f} s (noise level) ...")
-        while now() < noise[1]:
-            time.sleep(0.05)
+        if not wait_until(noise[1]):
+            return None
     for t, label in zip(turns, setup.names, strict=True):
-        while now() < t.start_s - 0.5:
-            time.sleep(0.05)
+        if not wait_until(t.start_s - 0.5):
+            return None
         typer.echo(f"  {label}: please speak now ({turn_s:.0f} s) ...")
-        while now() < t.end_s:
-            time.sleep(0.05)
+        if not wait_until(t.end_s):
+            return None
     return noise, turns
+
+
+def _open_failed(exc: Exception) -> typer.Exit:
+    hint = ""
+    if "ASIO" in str(exc):
+        hint = (
+            " Is another program using the ASIO driver (a DAW, or an earlier sessionscribe"
+            " that is still running)? Close it and try again."
+        )
+    return _fail(f"{exc}{hint}")
 
 
 @record_app.command("check")
@@ -275,19 +321,36 @@ def record_check(
     turn_s: Annotated[float, typer.Option(help="Seconds each participant speaks.")] = 5.0,
 ) -> None:
     """Guided mic check: silence, then each participant in turn; alarms per channel."""
+    from sessionscribe.core.audio.backend import AudioSetupError
     from sessionscribe.core.audio.live import Meter
     from sessionscribe.core.audio.mic_check import analyze
 
     setup = resolve_setup(rig, device, host_api, channels, names)
     opener = _opener(setup)
     events: list[Any] = []
-    t0 = time.monotonic()
     meter = Meter(opener, len(setup.channels), setup.samplerate)
     total = (noise_s + 1 if noise_s else 0) + len(setup.ids) * (turn_s + 1) + 0.5
-    worker = threading.Thread(target=meter.run, args=(total, events.append), daemon=True)
-    worker.start()
-    noise, turns = _prompt_turns(setup, noise_s, turn_s, lambda: time.monotonic() - t0)
-    worker.join()
+    stop = threading.Event()
+    signal.signal(signal.SIGINT, lambda *a: stop.set())
+    planned: dict[str, Any] = {}
+
+    def prompts() -> None:
+        planned["turns"] = _prompt_turns(setup, noise_s, turn_s, meter.audio_time, stop)
+        stop.set()
+
+    helper = threading.Thread(target=prompts, daemon=True)
+    helper.start()
+    # The stream runs in the main thread: ASIO drivers are COM objects and do not load
+    # from a thread without COM (PortAudio: "Failed to load ASIO driver").
+    try:
+        meter.run(total, events.append, stop)
+    except AudioSetupError as exc:
+        stop.set()
+        raise _open_failed(exc) from exc
+    helper.join(timeout=STALL_S + 1)
+    if not planned.get("turns"):
+        raise _fail("mic check did not complete")
+    noise, turns = planned["turns"]
     checks = analyze(events, setup.channels, setup.ids, turns, noise)
     if _print_checks(checks) == "FAIL":
         raise typer.Exit(1)
@@ -346,16 +409,15 @@ def record_start(
     def sink(event: Any) -> None:
         if isinstance(event, LevelEvent):
             events.append(event)
-            state["line"] = _level_line(event, setup, 6)
+            state["line"] = _level_line(event, setup, reserve=40)
         elif isinstance(event, RecorderAlarm):
             badge = "FAIL" if event.fatal else "WARN" if event.kind != "reconnected" else "INFO"
             typer.echo(f"\n{_badge(badge)} {event.message}")
         elif isinstance(event, RecorderStatus):
             left = "" if event.disk_left_s is None else f"  disk {event.disk_left_s / 3600:.1f} h"
             clock = time.strftime("%H:%M:%S", time.gmtime(event.time_s))
-            typer.echo(
-                f"\r{clock} buf {event.buffer_fill:4.0%}{left} gaps {event.gaps}  {state['line']}",
-                nl=False,
+            _overwrite(
+                f"{clock} buf {event.buffer_fill:4.0%}{left} gaps {event.gaps} {state['line']}"
             )
 
     def inhibit() -> Any:
@@ -381,34 +443,45 @@ def record_start(
         recorder.check_disk()
     except RecorderError as exc:
         raise _fail(str(exc)) from exc
+    from sessionscribe.core.audio.backend import AudioSetupError
+
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *a: stop.set())
-    result: dict[str, Any] = {}
-    runner = threading.Thread(
-        target=lambda: result.setdefault("manifest", recorder.run(stop, max_seconds=seconds)),
-        daemon=True,
-    )
-    typer.echo(
-        f"Recording {len(setup.channels)} channel(s) from {opener.device_name} "
-        f"({opener.host_api}) into {session}. Ctrl+C stops."
-    )
-    runner.start()
-    if check:
+
+    def mic_check() -> None:
         # Recording time (frames written), so the turns are ranges in the recorded audio.
-        noise, turns = _prompt_turns(setup, noise_s, turn_s, recorder.audio_time)
+        planned = _prompt_turns(setup, noise_s, turn_s, recorder.audio_time, stop)
+        if planned is None:
+            return
+        noise, turns = planned
         time.sleep(0.5)
-        checks = analyze(list(events), setup.channels, setup.ids, turns, noise)
+        try:
+            checks = analyze(list(events), setup.channels, setup.ids, turns, noise)
+        except ValueError as exc:
+            typer.echo(f"\n{_badge('FAIL')} mic check: {exc}")
+            return
         verdict = _print_checks(checks)
         recorder.set_mic_check({t.participant: (t.start_s, t.end_s) for t in turns})
         if verdict == "FAIL" and not force:
             typer.echo(f"{_badge('FAIL')} stopping: fix the channels above or use --force")
             stop.set()
-    while runner.is_alive():
-        runner.join(timeout=0.5)
-    manifest = result.get("manifest")
+
+    typer.echo(
+        f"Recording {len(setup.channels)} channel(s) from {opener.device_name} "
+        f"({opener.host_api}) into {session}. Ctrl+C stops."
+    )
+    if check:
+        threading.Thread(target=mic_check, daemon=True).start()
+    # The stream runs in the main thread (ASIO needs it, see record check).
+    try:
+        manifest = recorder.run(stop, max_seconds=seconds)
+    except AudioSetupError as exc:
+        stop.set()
+        raise _open_failed(exc) from exc
+    except RecorderError as exc:
+        stop.set()
+        raise _fail(str(exc)) from exc
     typer.echo("")
-    if manifest is None:
-        raise _fail("recording ended with an error (see the session's manifest)")
     _summary(manifest)
 
 
