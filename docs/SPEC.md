@@ -144,6 +144,7 @@ Track readers (raw, untouched) ─► energy envelopes ─► coupling estimate 
 - Owned-range boundaries are nudged to a nearby low-energy point (deterministic: same input → same boundaries): the quietest 0.5 s-smoothed point within ±`chunk_boundary_search_s`.
 - Words of a kept segment that lie past the owned range are dropped only when the neighbouring chunk's own words cover them; a segment duplicated entirely goes to `suppressed` (`chunk_boundary_duplicate`).
 - Track-local chunking means changing an offset never invalidates ASR results in `post` mode.
+- **Re-transcription of word-less speech:** Whisper sometimes skips speech after a window start. After each chunk's ASR, every VAD speech stretch ≥ `asr.refill_min_s` (1.5 s) without any recognised word is transcribed again as its own window (`asr.refill_pad_s` padding, only words inside the stretch kept). Recovered segments are flagged `refilled` and pass through all quality flags; stretches still without words are reported as `possible_missed_speech`. Switch: `asr.refill_holes`.
 - Memory budget: at most one chunk of all tracks in RAM at once.
 
 ### 5.2 Coupling estimation
@@ -181,7 +182,7 @@ Cross-correlation / spectral similarity between tracks may be explored in M3 as 
 
 ### 5.6 Quality flags
 
-Segments are flagged (not deleted) when: low `avg_logprob`; high `no_speech_prob` together with a lowish `avg_logprob` (both are per 30 s decoding window); high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap. Flags appear in JSON, in md as a marker, and in the GUI review list.
+Segments are flagged (not deleted) when: low `avg_logprob`; high `no_speech_prob` together with a lowish `avg_logprob` (both are per 30 s decoding window); high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap; `refilled` (recovered by re-transcription, §5.1). VAD speech that stays without words is listed as `possible_missed_speech`. Flags appear in JSON, in md as a marker, and in the GUI review list.
 
 ### 5.7 Cache
 
@@ -223,6 +224,7 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
   "suppressed": [ /* same shape + "suppression_reason": "bleed"|"duplicate"|"chunk_boundary_duplicate", "duplicate_of" */ ],
   // also: "bleed_mode_applied", "chunks" (owned/context ranges, cache key, cached),
   // "vad_intervals" per participant, "processing_events" (worker crashes, retries, warnings);
+  // "possible_missed_speech" (VAD speech without words, for review);
   // per segment "boundary_trimmed_words". audio_start_sample is track-local, start/end session time.
 }
 ```
