@@ -564,7 +564,7 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 - The mic check opens and alarms correctly on channels nobody speaks into.
 - A physical unplug and a mic check with every participant speaking have not been done yet.
 
-**Owner decision:** the tests that need several people (a mic check with every participant, a full session) move to the first live session; the program does not wait for them. Only wired channels go into the rig: an interface channel that is not in the rig is neither recorded nor checked (on the reference setup channels 2 and 3 are not connected).
+**Proposed (awaiting the owner):** the tests that need several people (a mic check with every participant, a full session) move to the first live session; the program does not wait for them. Only wired channels go into the rig: an interface channel that is not in the rig is neither recorded nor checked (on the reference setup channels 2 and 3 are not connected).
 
 ### Acceptance still to do (reference machine, owner)
 
