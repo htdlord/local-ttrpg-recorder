@@ -34,6 +34,7 @@ from sessionscribe.core.merge import (
 from sessionscribe.core.pipeline import PROCESSING_VERSION
 from sessionscribe.core.pipeline.asr import (
     AsrError,
+    Cancelled,
     Segment,
     SpeechInterval,
     resolve_model_path,
@@ -250,6 +251,8 @@ def _run_session(
     )
     try:
         for ti, ci in todo:
+            if cancel is not None and cancel():  # between chunks, whatever the engine does
+                raise Cancelled("transcription cancelled")
             p, chunk = planned[ti], planned[ti].chunks[ci]
             base = done
 
