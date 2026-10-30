@@ -88,7 +88,7 @@ def merge_tracks(
     out = Transcript()
     for track in tracks:
         own_gaps = [
-            (g.start, g.start + g.length)
+            (g.start, g.start + max(g.length, 1))  # unknown length (0): still a point in time
             for g in gaps
             if g.participant in (None, track.participant)
         ]
