@@ -6,10 +6,85 @@ References are made from real recordings, so **they are personal data**: they li
 the git-ignored `bench/refs/` folder and must never be committed, pasted into issues or
 logged. The `bench` commands print counts, ids and numbers only.
 
-> **Status (2026-10-30):** the verbatim workflow below works, but hand-correcting text is
-> a later feature (SPEC §14). For M3, a lighter *triage reference* is used instead: every
-> segment is labelled by ear as speech, bleed or wrong speaker, with no text correction
-> (`bench ref triage`, planned; see DECISIONS 2026-10-30).
+> **Status (2026-10-30):** for M3, the *triage reference* below is used: every segment of
+> our own output is labelled by ear, with no text correction. The verbatim workflow after
+> it still works, but hand-correcting text is a later feature (SPEC §14).
+
+## Triage reference (M3)
+
+The triage reference does not correct any text. It records, segment by segment, what each piece of our own output **is**. That is enough to measure what bleed handling keeps and removes. Expect about 2–4 s per unit: a 109 s clip has about 80 units, so 5 minutes; a 5 min clip takes 15–20 minutes.
+
+### Steps
+
+1. The clip folder needs `clip.toml` and `tracks/` (see "Clip folder" below).
+2. Open a terminal (not a redirected one) and run:
+   ```bash
+   uv run sessionscribe bench ref triage bench/refs/clip01
+   ```
+   The first run transcribes the clip with bleed handling **off**, using the default settings and the clip's language. It takes a GPU minute or two and is cached in the clip's `work/` folder. Every segment of that output, plus every "possible missed speech" stretch, becomes one *unit*.
+3. Each unit is shown on one line and played from its own track with 0.3 s of context:
+   ```
+   12/81 · gm · 00:01:23.4 (2.1 s) · own -2 dB / seat_3 -14 dB · suggestion: s (Enter)
+     <the ASR text, on the terminal only>
+   ```
+   The levels are relative to each track's normal speaking level: 0 dB is someone speaking into their own mic.
+4. Press one key per unit; the label is saved immediately (`triage.json`). `q` quits; the next run continues at the first unlabelled unit.
+5. When every unit is labelled, the status becomes `complete`. Check it with `--stats`.
+
+### Keys
+
+| Key | Meaning |
+|---|---|
+| `Enter` | accept the suggestion (only when one is shown) |
+| `s` | own speech of this track's participant |
+| `b` | bleed: someone else's voice that **their own track has too** (droppable) |
+| `w` | wrong speaker: someone else said it, but **only this track has it** (must be reassigned, never dropped) |
+| `v` | mixed: own speech **and** bleed in the same segment (counts as own speech) |
+| `o` | true overlap: this participant speaks while someone else speaks too |
+| `n` | no speech: noise, laughter without words, hallucinated text |
+| `?` | unsure: not scored |
+| `1`–`8` after `b`, `w`, `v` | the source (b, v) or the true speaker (w), by the number shown; `Enter` = unknown, `Esc` = cancel |
+| `space` / `m` / `x` | replay own track / all tracks mixed / the loudest other track |
+| `u` | back one unit (relabel it) |
+| `h` | help (the same table and the example below) |
+| `q` | save and quit |
+
+### `b` or `w`? An example
+
+Anna says "Nem!", and Béla's lavalier picks it up faintly.
+
+- **On Béla's track:** if **Anna's track also has** "Nem!", the copy on Béla's track is bleed: **`b`**, source Anna. Dropping it loses nothing.
+- **On Béla's track:** if **Anna's track missed it**, so that only Béla's track has the words, it is **`w`**, true speaker Anna. This is the only copy: it must be reassigned to Anna, never dropped.
+- **On Anna's track:** the same "Nem!" is simply **`s`**.
+
+Use `x` (the loudest other track) or `m` (all mixed) to check whether the other track has it.
+
+### Other options
+
+- `--rebuild`: regenerate the units, e.g. after new default settings or another model. Labels carry over by segment id, otherwise by the same speaker and ≥ 50 % time overlap; labels that no longer match are listed.
+- `--only unlabelled|all|suggested|SPEAKER` and `--from N`: choose what to visit, e.g. `--only all --from 30` to review.
+- `--export triage.csv` / `--import triage.csv`: label in a spreadsheet instead.
+  - Columns: `id, speaker, kind, start, end, suggestion, label, source`. Fill `label` (and `source` for b/w/v with a participant id).
+  - Listen in Audacity using the clip tracks; the `start`/`end` columns give the times.
+- `--stats`: label counts, how many suggestions were shown and accepted, seconds per unit.
+- `--no-play`: label without audio.
+
+### Scoring
+
+```bash
+uv run sessionscribe bench triage score bench/refs/clip01 work/m3/clip01.json
+```
+
+This reads a session output JSON of the clip and prints numbers only:
+
+- speech recall (s/w/v/o kept, also weighted by time);
+- false suppression (s/w/v/o suppressed);
+- residual duplicates (b kept);
+- overlap kept and marked;
+- no-speech kept;
+- wrong-speaker attribution.
+
+## Verbatim reference (later, SPEC §14)
 
 ## Clip folder
 

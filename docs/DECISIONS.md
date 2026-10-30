@@ -355,3 +355,32 @@ Measured on clip01 (large-v3 float16 quality; WER against the draft reference, i
 
 - [ ] `export`: warn when the ASR settings resolved now (preset, config, session, `--set`) differ from the last `transcribe` run's (`last_settings.json`), instead of silently using the stored ones. Do it the next time the export path is touched.
 - [x] Short-chunk WER loss recorded in SPEC §14 as a known risk for live transcription.
+
+## 2026-10-30 – M3 plan; triage tool implemented (phase A)
+
+M3 order (owner decision): the triage tool first, in its own PR, so labelling can start early. Then the ≥ 5 min clip (M1 re-run, triage). Then coupling, ownership, post/pre, dedup and overlap, tuned on the triage data. `rapidfuzz>=3.9` is now a runtime dependency (approved), for dedup and triage suggestions.
+
+- **Labels (owner addition):** the earlier draft's `o` = "own speech plus bleed" is split in two.
+  - `v` (mixed): own speech and bleed in one segment.
+  - `o`: true overlap.
+  - Final set: `s` own, `b` bleed (the source track has it too), `w` wrong speaker (only copy, reassign), `v` mixed, `o` overlap, `n` no speech, `?` unsure.
+  - Recall and false suppression use `s/w/v/o`; residual duplicates use `b` only; `?` is not scored.
+  - The help text and REFERENCE_GUIDE explain `b` vs `w` with an example (owner addition).
+- **Units:**
+  - the segments and possible-missed-speech stretches of the clip's own session output, produced with the default settings, `bleed.mode = off` and the clip's language;
+  - keyed by the stable segment id plus speaker and time;
+  - `triage.json` holds no text; the ASR text is shown on the terminal only, read from the cache at start.
+- **Suggestions (Enter to accept):**
+  - **Relative levels:** each track's level is measured relative to its own typical speech level (95th percentile of frames above −60 dBFS). Raw levels were useless on clip01: mic gains differ by 15–20 dB, so on most GM units another track was "louder".
+  - **Rules:**
+    - `b` needs the louder track (relative, ≥ 6 dB) to have a segment there itself, or ≥ 80 % similar text on a louder track;
+    - `s` when the own track is ≥ 6 dB louder, even if another track echoes the text, because the louder copy is the original;
+    - `o` when both tracks are within 10 dB of their speech level and the texts differ;
+    - `n` for quiet missed-speech stretches.
+  - **Contradictions:** overlapping units that would name each other as the bleed source get no suggestion.
+  - **Result on clip01:** 16 of 81 units get a suggestion. Level cues are weak before coupling is estimated (M3); the rest is decided by ear. `--stats` will show the accepted share and seconds per unit after the first real labelling.
+- **Saving:** `triage.json` is saved atomically after every label; a run resumes at the first unlabelled unit. `--rebuild` carries labels over by id, else by the same speaker and ≥ 50 % mutual overlap, and lists the rest.
+- **Matching for scoring:** id first (post mode keeps the ASR); otherwise the same speaker and ≥ 50 % mutual time overlap (pre mode re-runs ASR). A unit is kept, suppressed or absent.
+- **Terminal:**
+  - single keys via `msvcrt` (Windows) or `termios` (Linux); outside a TTY there is a clear error pointing to `--export/--import`;
+  - playback via `sounddevice`, which disables itself with one warning if audio fails.
