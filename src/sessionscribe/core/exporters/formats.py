@@ -146,9 +146,12 @@ def _segment_json(s: TranscriptSegment) -> dict[str, Any]:
             for w in s.words
         ],
     }
+    if s.probable_speaker:
+        out["probable_speaker"] = s.probable_speaker
     if s.suppression_reason:
         out["suppression_reason"] = s.suppression_reason
         out["duplicate_of"] = s.duplicate_of
+        out["bleed_source"] = s.bleed_source
     return out
 
 
@@ -181,7 +184,7 @@ def to_json(result: SessionResult) -> dict[str, Any]:
             | ({"channel": p.channel} if p.channel else {})
             for p in result.participants
         ],
-        "coupling_db": None,
+        "coupling_db": result.coupling_db,
         "recording_gaps": [
             {
                 "start_sample": g.start,

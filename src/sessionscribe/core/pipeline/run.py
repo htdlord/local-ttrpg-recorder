@@ -34,8 +34,10 @@ from sessionscribe.core.pipeline.asr import (
     resolve_model_path,
     transcribe_kwargs,
 )
+from sessionscribe.core.pipeline.attribution import apply_bleed_handling
 from sessionscribe.core.pipeline.chunks import Chunk, plan_chunks, resolve_chunks
 from sessionscribe.core.pipeline.features import frame_samples, track_envelope
+from sessionscribe.core.pipeline.ownership import compute_ownership
 from sessionscribe.core.pipeline.worker import (
     AsrJob,
     ChunkResult,
@@ -105,6 +107,8 @@ class RunStats:
     crashes: int = 0
     refilled: int = 0  # segments recovered by re-transcribing word-less VAD speech
     missed: int = 0  # VAD stretches still without words (flagged for review)
+    bleed_suppressed: int = 0
+    duplicates: int = 0
     missing: list[str] = field(default_factory=list)
 
 
@@ -304,6 +308,15 @@ def _run_session(
             )
 
     transcript = merge_tracks(tracks, settings.quality, gaps)
+    coupling_db: list[list[float]] | None = None
+    if settings.bleed.mode != "off":
+        ownership = compute_ownership(session, settings, cache)
+        for warning in ownership.warnings:
+            recording_sink(WarningEvent("bleed", warning))
+        transcript = apply_bleed_handling(transcript, ownership, settings.bleed, settings.dedup)
+        coupling_db = ownership.coupling.to_json()
+        stats.bleed_suppressed = sum(s.suppression_reason == "bleed" for s in transcript.suppressed)
+        stats.duplicates = sum(s.suppression_reason == "duplicate" for s in transcript.suppressed)
     for seg in transcript.segments:
         sink(SegmentEvent(seg.speaker, seg))
     duration = max((p.participant.offset_samples + p.length for p in planned), default=0)
@@ -321,6 +334,8 @@ def _run_session(
         vad=vad,
         gaps=list(gaps),
         processing_events=events,
+        bleed_mode_applied=settings.bleed.mode,
+        coupling_db=coupling_db,
     )
     return result, stats
 

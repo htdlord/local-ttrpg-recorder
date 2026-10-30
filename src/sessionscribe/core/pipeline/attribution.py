@@ -1,0 +1,205 @@
+"""Bleed attribution, dedup and overlap marking after ASR (SPEC §5.4-5.5).
+
+Everything here works on the merged transcript (session time) and the ownership masks;
+nothing re-runs ASR. Losing real speech is worse than a duplicate, so a segment is
+suppressed as bleed only with three pieces of evidence: its own track hardly owns its
+frames, another track does, and that track has the words itself. Without the last one
+it is the only copy (the triage ``w`` case): kept and flagged ``possible_wrong_speaker``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import replace
+
+from sessionscribe.core.bench.text import normalize
+from sessionscribe.core.config import BleedSettings, DedupSettings
+from sessionscribe.core.merge import Transcript, TranscriptSegment
+from sessionscribe.core.pipeline.ownership import Ownership
+from sessionscribe.core.quality import (
+    LOW_OWNERSHIP,
+    POSSIBLE_DUPLICATE,
+    POSSIBLE_WRONG_SPEAKER,
+)
+from sessionscribe.core.timeline import TIMELINE_RATE
+
+SOURCE_OWNS = 0.5  # another track owns at least this share of the segment's frames
+SOURCE_WORDS = 0.5  # ... and its kept words cover at least this share of the segment
+DEDUP_LOW, DEDUP_HIGH = 0.5, 0.5  # ownership evidence for removing a duplicate
+SHORT_LOW, SHORT_HIGH = 0.2, 0.8  # stronger evidence for utterances under min_words
+OVERLAP_OWNED = 0.5
+OWNED_WORD = 0.5  # a word counts as own speech when its track owns this share of it
+OWNED_SPEECH_S = 0.5  # this much owned speech inside a segment keeps it (mixed: own + bleed)
+
+
+def segment_ownership(seg: TranscriptSegment, own: Ownership) -> float:
+    """Share of the segment the speaker owns; words weighted by duration."""
+    if seg.words:
+        total = sum(max(1, w.end - w.start) for w in seg.words)
+        return (
+            sum(
+                own.owned(seg.speaker, w.start, max(w.end, w.start + 1)) * max(1, w.end - w.start)
+                for w in seg.words
+            )
+            / total
+        )
+    return own.owned(seg.speaker, seg.start, max(seg.end, seg.start + 1))
+
+
+def owned_speech_samples(seg: TranscriptSegment, own: Ownership) -> int:
+    """Duration of the segment's words its own track owns (mixed segments keep these)."""
+    return sum(
+        w.end - w.start
+        for w in seg.words
+        if w.end > w.start and own.owned(seg.speaker, w.start, w.end) >= OWNED_WORD
+    )
+
+
+def _add_flag(seg: TranscriptSegment, flag: str) -> TranscriptSegment:
+    if flag in seg.quality_flags:
+        return seg
+    return replace(seg, quality_flags=(*seg.quality_flags, flag))
+
+
+def _covered(start: int, end: int, segments: Sequence[TranscriptSegment]) -> float:
+    """Share of ``[start, end)`` covered by the words (or spans) of ``segments``."""
+    spans = sorted((w.start, w.end) for s in segments for w in (s.words or ())) + [
+        (s.start, s.end) for s in segments if not s.words
+    ]
+    covered, cur = 0, start
+    for a, b in sorted(spans):
+        a, b = max(a, cur), min(b, end)
+        if b > a:
+            covered += b - a
+            cur = b
+    return covered / max(1, end - start)
+
+
+def attribute_bleed(transcript: Transcript, own: Ownership, settings: BleedSettings) -> Transcript:
+    """Set ``ownership``; suppress evidenced bleed; flag low ownership / wrong speaker."""
+    segs = [replace(s, ownership=round(segment_ownership(s, own), 3)) for s in transcript.segments]
+    candidates: dict[int, str] = {}
+    for n, seg in enumerate(segs):
+        if seg.ownership is None or seg.ownership >= settings.suppress_below:
+            continue
+        if owned_speech_samples(seg, own) >= OWNED_SPEECH_S * TIMELINE_RATE:
+            continue  # own words inside (mixed): never suppressed, flagged low_ownership below
+        others = [
+            (own.owned(k, seg.start, max(seg.end, seg.start + 1)), k)
+            for k in own.speakers
+            if k != seg.speaker
+        ]
+        if others:
+            share, likely = max(others)
+            if share >= SOURCE_OWNS:
+                candidates[n] = likely
+    out: list[TranscriptSegment] = []
+    suppressed = list(transcript.suppressed)
+    for n, seg in enumerate(segs):
+        source = candidates.get(n)
+        if source is not None:
+            source_segments = [
+                s for m, s in enumerate(segs) if s.speaker == source and m not in candidates
+            ]
+            if _covered(seg.start, seg.end, source_segments) >= SOURCE_WORDS:
+                suppressed.append(replace(seg, suppression_reason="bleed", bleed_source=source))
+                continue
+            seg = replace(_add_flag(seg, POSSIBLE_WRONG_SPEAKER), probable_speaker=source)
+        if seg.ownership is not None and seg.ownership < settings.low_ownership_below:
+            seg = _add_flag(seg, LOW_OWNERSHIP)
+        out.append(seg)
+    suppressed.sort(key=lambda s: (s.start, s.id))
+    return replace(transcript, segments=out, suppressed=suppressed)
+
+
+def _gap(a: TranscriptSegment, b: TranscriptSegment) -> int:
+    return max(0, max(a.start, b.start) - min(a.end, b.end))
+
+
+def dedup(
+    transcript: Transcript, settings: DedupSettings, own: Ownership | None = None
+) -> Transcript:
+    """Remove a cross-track duplicate only with ownership evidence; else keep and flag.
+
+    A weaker copy that contains owned speech of its own (mixed) is never removed.
+    """
+    if not settings.enabled:
+        return transcript
+    from rapidfuzz import fuzz
+
+    segs = list(transcript.segments)
+    texts = [normalize(s.text) for s in segs]
+    max_gap = round(settings.max_time_gap_s * TIMELINE_RATE)
+    remove: dict[int, int] = {}
+    flag: set[int] = set()
+    for i, a in enumerate(segs):
+        for j in range(i + 1, len(segs)):
+            b = segs[j]
+            if b.start > a.end + max_gap:
+                break  # sorted by start: every later segment is further away
+            if a.speaker == b.speaker or _gap(a, b) > max_gap or not texts[i] or not texts[j]:
+                continue
+            if fuzz.ratio(texts[i], texts[j]) < settings.similarity:
+                continue
+            oa, ob = a.ownership, b.ownership
+            if oa is None or ob is None:
+                flag.update((i, j))
+                continue
+            low, high = (i, j) if oa <= ob else (j, i)
+            lo, hi = min(oa, ob), max(oa, ob)
+            short = min(len(texts[i].split()), len(texts[j].split())) < settings.min_words
+            need_low, need_high = (SHORT_LOW, SHORT_HIGH) if short else (DEDUP_LOW, DEDUP_HIGH)
+            if hi >= OVERLAP_OWNED and lo >= OVERLAP_OWNED:
+                continue  # both own their frames: two people said it, keep both
+            mixed = own is not None and (
+                owned_speech_samples(segs[low], own) >= OWNED_SPEECH_S * TIMELINE_RATE
+            )
+            if lo < need_low and hi >= need_high and not mixed and low not in remove:
+                remove[low] = high
+            else:
+                flag.update((i, j))
+    out, suppressed = [], list(transcript.suppressed)
+    for n, seg in enumerate(segs):
+        if n in remove:
+            suppressed.append(
+                replace(seg, suppression_reason="duplicate", duplicate_of=segs[remove[n]].id)
+            )
+        else:
+            out.append(_add_flag(seg, POSSIBLE_DUPLICATE) if n in flag else seg)
+    suppressed.sort(key=lambda s: (s.start, s.id))
+    return replace(transcript, segments=out, suppressed=suppressed)
+
+
+def mark_overlaps(transcript: Transcript, own: Ownership) -> Transcript:
+    """Segments of different speakers overlapping in time, both owning the shared frames."""
+    segs = list(transcript.segments)
+    marked: set[int] = set()
+    for i, a in enumerate(segs):
+        for j in range(i + 1, len(segs)):
+            b = segs[j]
+            if b.start >= a.end:
+                break
+            if a.speaker == b.speaker:
+                continue
+            lo, hi = max(a.start, b.start), min(a.end, b.end)
+            if hi <= lo:
+                continue
+            if (
+                own.owned(a.speaker, lo, hi) >= OVERLAP_OWNED
+                and own.owned(b.speaker, lo, hi) >= OVERLAP_OWNED
+            ):
+                marked.update((i, j))
+    return replace(
+        transcript,
+        segments=[replace(s, overlap=True) if n in marked else s for n, s in enumerate(segs)],
+    )
+
+
+def apply_bleed_handling(
+    transcript: Transcript, own: Ownership, bleed: BleedSettings, dedup_settings: DedupSettings
+) -> Transcript:
+    out = attribute_bleed(transcript, own, bleed)
+    out = dedup(out, dedup_settings, own)
+    if dedup_settings.mark_overlaps:
+        out = mark_overlaps(out, own)
+    return out

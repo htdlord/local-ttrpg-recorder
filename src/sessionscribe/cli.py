@@ -482,7 +482,13 @@ def _report(stats: RunStats, written: list[Path]) -> None:
         f"{stats.chunks} chunks: {stats.cached} from cache, {stats.transcribed} transcribed"
         + (f", {stats.crashes} worker crash(es) recovered" if stats.crashes else "")
         + (f"; {stats.refilled} segment(s) recovered by re-transcription" if stats.refilled else "")
-        + (f"; {stats.missed} possible missed speech passage(s) to review" if stats.missed else ""),
+        + (f"; {stats.missed} possible missed speech passage(s) to review" if stats.missed else "")
+        + (
+            f"; {stats.bleed_suppressed} bleed segment(s) suppressed"
+            if stats.bleed_suppressed
+            else ""
+        )
+        + (f"; {stats.duplicates} duplicate(s) removed" if stats.duplicates else ""),
         err=True,
     )
     for path in written:
@@ -556,12 +562,6 @@ def transcribe(
         session=session,
     )
     _warn_mode_issues(settings)
-    if settings.bleed.mode != "off":
-        typer.echo(
-            f"{_badge('INFO')} bleed handling arrives in M3; this run keeps every segment "
-            "(bleed_mode_applied = off)",
-            err=True,
-        )
     typer.echo(
         f"{session.name}: {len(session.participants)} participant(s); model "
         f"{settings.model.id}, {settings.asr.mode} mode",
