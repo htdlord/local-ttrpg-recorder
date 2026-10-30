@@ -564,11 +564,13 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 - The mic check opens and alarms correctly on channels nobody speaks into.
 - A physical unplug and a mic check with every participant speaking have not been done yet.
 
-**Proposed (awaiting the owner):** the tests that need several people (a mic check with every participant, a full session) move to the first live session; the program does not wait for them. Only wired channels go into the rig: an interface channel that is not in the rig is neither recorded nor checked (on the reference setup channels 2 and 3 are not connected).
+**Owner decision (2026-10-30):** M5 is merged on these results. The tests that need several people or a real session stay open (below); the program does not wait for them. Only wired channels go into the rig: an interface channel that is not in the rig is neither recorded nor checked (on the reference setup channels 2 and 3 are not connected).
 
-### Acceptance still to do (reference machine, owner)
+### Open tasks (M5, owner)
 
-- [ ] `pytest -m audio_hw` with `SESSIONSCRIBE_TEST_DEVICE`, `SESSIONSCRIBE_TEST_HOST_API` and `SESSIONSCRIBE_TEST_CHANNELS` set, on ASIO and WASAPI.
-- [ ] Unplug test: pull the UMC1820 during `record start`, plug it back in, and check that recording continues, with a `device_lost` gap.
-- [ ] `record check` with one channel turned down and one muted: the alarms fire.
-- [ ] An 8 h, 8-channel `record start` followed by `record verify`, without loss.
+- [ ] Mic check at the start of a real session, with every participant speaking (`record start --rig rig.toml`).
+- [ ] Record a full session with the recorder, then `record verify`.
+- [ ] Physical unplug: pull the UMC1820 during `record start`, plug it back in, and check that recording continues with a `device_lost` gap.
+- [ ] Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.
+- [x] ~~`pytest -m audio_hw` on ASIO~~: done on 2026-10-30 (2 min recording + verify, device refresh). WASAPI is still open; run it alongside one of the tasks above.
+- [ ] `record check` with one channel deliberately turned down: the `quiet` alarm fires.
