@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from PySide6.QtCore import QSettings, QThread
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from sessionscribe.core.session import Session
-from sessionscribe.gui import i18n, icons, theme
+from sessionscribe.gui import i18n, icons, theme, workers
 from sessionscribe.gui.audio_preview import PreviewPlayer
 from sessionscribe.gui.state import AppState
 from sessionscribe.gui.tabs.result_tab import ResultTab
@@ -60,8 +60,8 @@ class SystemCheckDialog(QDialog):
             worker = DoctorWorker()
             worker.result.connect(self.add_result)
             worker.finished.connect(self.done_report)
-            worker.failed.connect(lambda m: self.heading.setText(m))
-            self.worker_thread = start(worker, self)
+            worker.failed.connect(self.heading.setText)  # bound slot: runs in the GUI thread
+            self.worker_thread = start(worker)
 
     def add_result(self, result: Any) -> None:
         r = self.table.rowCount()
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         self.player = player
         self.setWindowTitle("SessionScribe")
         self.resize(1200, 800)
-        self._export_worker: ProcessWorker | None = None
+        self._current_export: ProcessWorker | None = None
         self.build()
         self.state.session_changed.connect(self._session_opened)
 
@@ -227,9 +227,16 @@ class MainWindow(QMainWindow):
             export_only=True,
             process_kwargs=self.state.process_kwargs,
         )
-        worker.finished.connect(lambda result, *_: self.state.set_result(result))
-        self._export_worker = worker
-        start(worker, self)
+        # Bound slot (not a lambda), so it runs in the GUI thread; a newer session's
+        # export supersedes this one.
+        worker.finished.connect(self._export_finished)
+        self._current_export = worker
+        start(worker)
+
+    def _export_finished(self, result: Any, *_: Any) -> None:
+        if self.sender() is self._current_export:
+            self._current_export = None
+            self.state.set_result(result)
 
     def _reexport(self) -> None:
         self.run_tab.start(export_only=True)
@@ -238,6 +245,11 @@ class MainWindow(QMainWindow):
         s = self.state.session
         self.setWindowTitle(f"SessionScribe - {s.name}" if s else "SessionScribe")
         self.statusBar().showMessage(str(s.folder) if s else self.tr("No session open"))
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        # Completed chunks stay cached; a cancelled run resumes next time.
+        workers.stop_all()
+        super().closeEvent(event)
 
     def system_check(self) -> None:
         SystemCheckDialog(self, self.tokens).exec()

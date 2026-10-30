@@ -105,16 +105,64 @@ class DoctorWorker(QObject):
         self.finished.emit(report)
 
 
-def start(worker: QObject, parent: QObject) -> QThread:
-    """Run ``worker.run`` in a new thread that ends (and cleans up) with the worker."""
-    thread = QThread(parent)
+class _Registry(QObject):
+    """Keeps every running worker and its thread alive until the thread has finished.
+
+    Python owns both objects: replacing a reference (a new session opened while the
+    previous export still runs) must not free a worker mid-run, and closing the window
+    must not destroy a running thread. Release happens in the GUI thread (queued slot).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.active: dict[QThread, QObject] = {}
+
+    @Slot()
+    def release(self) -> None:
+        thread = self.sender()
+        if isinstance(thread, QThread):
+            thread.wait()  # finished is emitted just before the thread ends
+            self.active.pop(thread, None)
+
+
+_registry: _Registry | None = None
+
+
+def _get_registry() -> _Registry:
+    global _registry
+    if _registry is None:
+        _registry = _Registry()
+    return _registry
+
+
+def start(worker: QObject) -> QThread:
+    """Run ``worker.run`` in a new thread that quits when the worker is done."""
+    registry = _get_registry()
+    thread = QThread()
     worker.moveToThread(thread)
     thread.started.connect(worker.run)  # type: ignore[attr-defined]
     for name in ("finished", "failed", "cancelled"):
         signal = getattr(worker, name, None)
         if signal is not None:
             signal.connect(thread.quit)
-    thread.finished.connect(worker.deleteLater)
-    thread.finished.connect(thread.deleteLater)
+    thread.finished.connect(registry.release)
+    registry.active[thread] = worker
     thread.start()
     return thread
+
+
+def running() -> int:
+    return sum(not t.isFinished() for t in _get_registry().active)
+
+
+def stop_all(timeout_ms: int = 30_000) -> bool:
+    """Cancel what can be cancelled and wait for every thread; True if all ended."""
+    registry = _get_registry()
+    for worker in registry.active.values():
+        cancel = getattr(worker, "cancel", None)
+        if callable(cancel):
+            cancel()
+    ok = all(t.wait(timeout_ms) for t in list(registry.active))
+    for thread in [t for t in registry.active if t.isFinished()]:
+        del registry.active[thread]
+    return ok

@@ -178,3 +178,26 @@ def test_theme_switch_rebuilds_the_window(qtbot, tmp_path):
     assert w.tokens.background == "#14181d" and w.tabs.count() == 4
     w.set_preference("theme", "light")
     assert w.tokens.background == "#f4f6f8"
+
+
+def test_superseded_export_and_close_leave_no_running_thread(qtbot, tmp_path):
+    from sessionscribe.gui import workers
+
+    w, state = window(qtbot, tmp_path)
+    first = recordings(tmp_path / "a", n=2)
+    second = recordings(tmp_path / "b", n=3)
+    for folder in (first, second):
+        w.session_tab.new_from_folder(folder)
+        assert w.session_tab.save()
+        w.run_tab.run_btn.click()
+        qtbot.waitUntil(lambda: not w.run_tab.running and workers.running() == 0, timeout=20000)
+    w.open_path(first / "session.toml")
+    w.open_path(second / "session.toml")  # replaces the running export of the first
+    qtbot.waitUntil(lambda: workers.running() == 0, timeout=20000)
+    qtbot.wait(50)
+    assert state.result is not None
+    assert {p.id for p in state.result.participants} == {
+        p.id for p in Session.load(second).participants
+    }
+    w.close()
+    assert workers.running() == 0

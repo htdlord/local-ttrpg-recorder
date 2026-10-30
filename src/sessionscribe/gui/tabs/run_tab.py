@@ -118,7 +118,7 @@ class RunTab(QWidget):
         worker.failed.connect(self._failed)
         worker.cancelled.connect(self._cancelled)
         self.worker = worker
-        self.worker_thread = start(worker, self)
+        self.worker_thread = start(worker)
         self.refresh()
 
     def cancel(self) -> None:
