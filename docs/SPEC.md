@@ -328,6 +328,8 @@ Bleed handling is always compared against `bleed_mode=off` on the same clips.
 
 Live transcription; campaign glossary + post-correction list; hybrid fast/quality re-run; session summary; diarization for mixed recordings; cross-correlation evidence; transcript editor; verbatim hand-corrected reference transcripts for WER benchmarking (the `ref labels`/`ref build --verified` round trip exists since M1).
 
+Known risk for live transcription: short ASR windows cost accuracy. On clip01, 30 s chunks raised WER from 21.9 % to 31.9 % (29.9 % with re-transcription of word-less speech) against whole tracks, because Whisper re-windows and skips speech after window starts (DECISIONS 2026-10-30). A live mode must measure this and plan for it (longer windows, later re-runs of provisional segments).
+
 ## 15. Open questions
 
 - Default ownership margin and attenuation – measured in M3.
