@@ -432,6 +432,11 @@ BUILTIN_PRESETS: dict[str, dict[str, Any]] = {
     # Optional, faster: batched large-v3 at batch size 4 (M1 benchmark: about 2.4x faster,
     # +3 pp WER); temperature fallback and anti-hallucination retries are not available.
     "fast": {"asr": {"mode": "fast", "batch_size": 4}},
+    # Bleed profiles (SPEC §3.5). Conservative = the default post mode: attribution after
+    # ASR, nothing re-transcribed when its parameters change.
+    "conservative": {"bleed": {"mode": "post"}},
+    # Strong: attenuate frames a track does not own before ASR (needs re-ASR to retune).
+    "strong": {"bleed": {"mode": "pre", "pre_attenuation_db": 15.0}},
 }
 DEFAULT_PRESET = "conversation"
 

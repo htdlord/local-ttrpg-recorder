@@ -184,3 +184,9 @@ def test_resolve_runtime(monkeypatch):
     monkeypatch.setattr(config, "available_compute_types", lambda device: ("int8", "float32"))
     rt = config.resolve_runtime(load_settings())
     assert rt.device == "cpu" and rt.compute_type == "int8" and rt.cpu_threads >= 1
+
+
+def test_bleed_profiles():
+    assert load_settings(preset="conservative").bleed.mode == "post"
+    strong = load_settings(preset="strong").bleed
+    assert (strong.mode, strong.pre_attenuation_db, strong.mute) == ("pre", 15.0, False)
