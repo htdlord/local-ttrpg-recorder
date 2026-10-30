@@ -470,6 +470,16 @@ class Recorder:
             m.metrics.timestamp_discontinuities = self.timestamps.discontinuities
             write_session(self.session_path, self.session)
 
+    def audio_time(self) -> float:
+        """Recording time in seconds: frames written (incl. gaps) / sample rate."""
+        return self.writer.position / self.config.samplerate
+
+    def set_mic_check(self, ranges: dict[str, tuple[float, float]]) -> None:
+        """Mic check turns in recording time (guided coupling, SPEC §5.2)."""
+        with self._lock:
+            self.session.mic_check = dict(ranges)
+        self._save()
+
     @property
     def rec_dir(self) -> Path:
         return self.config.session_dir / "rec"
@@ -629,7 +639,7 @@ class Recorder:
                     stream = new_stream
                 if now - last_level >= self.config.level_interval_s:
                     last_level = now
-                    event = self.levels.take_event(self._time())
+                    event = self.levels.take_event(round(self.audio_time(), 3))
                     if event:
                         self.sink(event)
                 if now - last_disk >= DISK_CHECK_S:

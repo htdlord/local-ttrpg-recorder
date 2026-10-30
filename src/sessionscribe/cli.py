@@ -708,8 +708,10 @@ def clean(
 
 
 from sessionscribe.cli_bench import bench_app  # noqa: E402
+from sessionscribe.cli_record import record_app  # noqa: E402
 
 app.add_typer(bench_app, name="bench")
+app.add_typer(record_app, name="record")
 
 
 if __name__ == "__main__":
