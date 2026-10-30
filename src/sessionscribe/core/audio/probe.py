@@ -212,6 +212,7 @@ class TimestampMonitor:
         self._baseline = 0.0
         self._excess_s = 0.0
         self._jitter = array("d")
+        self.last_shift_s = 0.0  # size of the latest discontinuity (positive: audio lost)
 
     def update(self, adc: float, frames: int) -> None:
         if adc <= 0.0:
@@ -234,6 +235,7 @@ class TimestampMonitor:
             self._excess_s += block_s
             if self._excess_s >= self.persist_s:
                 self.discontinuities += 1
+                self.last_shift_s = shift
                 self._baseline = smoothed
                 self._excess_s = 0.0
         else:
