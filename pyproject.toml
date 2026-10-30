@@ -25,6 +25,8 @@ dependencies = [
     "typer>=0.15",
     "pydantic>=2.9",
     "tomli-w>=1.1",
+    # Text similarity for dedup (SPEC 5.5) and triage suggestions.
+    "rapidfuzz>=3.9",
 ]
 
 [project.optional-dependencies]
