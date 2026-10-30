@@ -37,6 +37,9 @@ desktop.ini
 
 # Personal data: real recordings and reference transcripts (never commit)
 bench/refs/
+# Recording profiles name the participants (personal data)
+rig.toml
+*.rig.toml
 
 # Audio files (no large binaries; tests use synthetic audio)
 *.wav
