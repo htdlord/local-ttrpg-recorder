@@ -133,3 +133,13 @@ def test_pre_gains_attenuate_and_release():
     assert out[100] == 1.0 and abs(out[5 * 320 + 100] - 10 ** (-15 / 20)) < 1e-6
     step = np.abs(np.diff(out)).max()
     assert step < 0.01  # 10 ms ramps, no clicks
+
+
+def test_silent_mic_detection():
+    from sessionscribe.core.pipeline.ownership import silent_mics
+
+    lv = sb.levels(
+        [[(0, 30)], [(30, 50)], []], sb.acoustic(3, -40.0), [0, 0, 0], [-75, -75, -45], 60
+    )
+    # bela's mic: a -45 dB hum and nothing of him above it
+    assert silent_mics(["gm", "anna", "bela"], lv, 10.0) == ["bela"]

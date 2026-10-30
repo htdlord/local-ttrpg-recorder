@@ -559,7 +559,10 @@ def triage_score(
         f"{pct(score.false_suppression)}, absent {score.speech_absent}"
     )
     typer.echo(
-        f"bleed (b, {score.bleed_units}): residual duplicates {pct(score.residual_duplicates)}"
+        f"bleed (b, {score.bleed_units}): residual duplicates {pct(score.residual_duplicates)}; "
+        f"working source ({score.bleed_units_working}) "
+        f"{pct(score.residual_duplicates_working)}, silent source "
+        f"({score.bleed_units_silent}) {pct(score.residual_duplicates_silent)}"
     )
     typer.echo(
         f"overlap (o, {score.overlap_units}): kept {pct(score.overlap_kept)}, "
@@ -604,6 +607,8 @@ def bench_bleed(
 
         typer.echo(
             f"  {r['variant']:14s} recall {pct(s['speech_recall'])}, false suppression "
-            f"{pct(s['false_suppression'])}, residual duplicates {pct(s['residual_duplicates'])}"
+            f"{pct(s['false_suppression'])}, residual duplicates {pct(s['residual_duplicates'])} "
+            f"(working source {pct(s['residual_duplicates_working'])}, "
+            f"silent source {pct(s['residual_duplicates_silent'])})"
         )
     typer.echo(str(run_dir / "results.md"))

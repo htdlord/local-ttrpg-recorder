@@ -160,6 +160,9 @@ class BleedSettings(_Section):
     text_similarity: float = Field(
         70.0, ge=0, le=100, description="Bleed text must match the source's words this well."
     )
+    silent_mic_range_db: float = Field(
+        10.0, ge=0, description="A mic whose speech level is this close to its noise is silent."
+    )
     coupling_min_frames: int = Field(250, ge=1, description="Frames needed per mic pair.")
     coupling_default_db: float = Field(-30.0, description="Coupling for pairs with too few frames.")
 

@@ -63,3 +63,26 @@ def test_score():
 def test_empty_groups_give_none():
     s = score_triage(TriageFile(clip="c", speakers=["gm"]), {"segments": []})
     assert s.speech_recall is None and s.residual_duplicates is None
+
+
+def test_residual_split_by_source_mic():
+    tri = TriageFile(
+        clip="c",
+        speakers=["gm", "anna", "bela"],
+        units=[
+            unit("a1", "anna", 0, 1, "b", "gm"),
+            unit("a2", "anna", 2, 3, "b", "bela"),
+            unit("g1", "gm", 4, 5, "b", "bela"),
+        ],
+    )
+    out = {
+        "silent_mics": ["bela"],
+        "segments": [seg("a2", "anna", 2, 3), seg("g1", "gm", 4, 5)],
+        "suppressed": [seg("a1", "anna", 0, 1)],
+    }
+    s = score_triage(tri, out)
+    assert (s.bleed_units_working, s.residual_duplicates_working) == (1, 0.0)
+    assert (s.bleed_units_silent, s.residual_duplicates_silent) == (2, 1.0)
+    assert score_triage(tri, out, silent_mics=[]).residual_duplicates_working == pytest.approx(
+        2 / 3, abs=1e-3
+    )
