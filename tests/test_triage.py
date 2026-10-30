@@ -190,12 +190,14 @@ def test_stats():
 def make_clip(tmp_path):
     folder = tmp_path / "clip"
     (folder / "tracks").mkdir(parents=True)
-    x = np.zeros(6 * R, np.float32)
-    tone = 0.4 * np.sin(2 * np.pi * 500 * np.arange(R) / R)
-    gm, anna = x.copy(), x.copy()
-    gm[R : 2 * R] = tone  # gm speaks at 1 s; anna's mic hears it 20 dB lower
-    anna[R : 2 * R] = 0.1 * tone
-    anna[4 * R : 5 * R] = tone  # anna speaks at 4 s
+    rng = np.random.default_rng(3)
+    tone = 0.4 * np.sin(2 * np.pi * 500 * np.arange(6 * R) / R)
+    gm = rng.normal(0, 1e-4, 20 * R).astype(np.float32)  # about -80 dBFS mic noise
+    anna = rng.normal(0, 1e-4, 20 * R).astype(np.float32)
+    gm[R : 7 * R] += tone  # gm speaks 1-7 s; anna's mic hears it 20 dB lower
+    anna[R : 7 * R] += 0.1 * tone
+    anna[12 * R : 18 * R] += tone  # anna speaks 12-18 s; gm's mic hears her too
+    gm[12 * R : 18 * R] += 0.1 * tone
     sf.write(str(folder / "tracks" / "ch01_gm.wav"), gm, R, subtype="FLOAT")
     sf.write(str(folder / "tracks" / "ch02_anna.wav"), anna, R, subtype="FLOAT")
     init_clip(folder, "hu")
@@ -213,7 +215,8 @@ def test_units_from_the_session_pipeline(tmp_path):
     assert got == [
         ("gm", 1.0, "s", None),
         ("anna", 1.0, "b", "gm"),  # the fake engine transcribes the bleed too
-        ("anna", 4.0, "s", None),
+        ("gm", 12.0, "b", "anna"),
+        ("anna", 12.0, "s", None),
     ]
     path = t.triage_path(clip)
     t.write_triage(path, tf)

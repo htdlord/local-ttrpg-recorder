@@ -563,12 +563,44 @@ def clip_result(
     return session, result
 
 
+OWN_SUGGEST = 0.8  # unit owned at least this much by its track: suggest "s"
+BLEED_SUGGEST = 0.2  # owned less, and another track owns it and has words there: "b"
+
+
+def ownership_suggestions(
+    units: Sequence[TriageUnit], own: Any, segments: Sequence[TranscriptSegment]
+) -> None:
+    """Replace suggestions with ownership-based ones (clip01: 12 of 15 right vs 5 of 16).
+
+    Where ownership is ambiguous (both tracks own the frames) there is no suggestion.
+    """
+    for u in units:
+        a, b = round(u.start * TIMELINE_RATE), round(u.end * TIMELINE_RATE)
+        mine = own.owned(u.speaker, a, b)
+        others = [(own.owned(k, a, b), k) for k in own.speakers if k != u.speaker]
+        share, source = max(others) if others else (0.0, None)
+        has_words = any(x.speaker == source and x.end > a and x.start < b for x in segments)
+        u.suggestion, u.suggestion_source = None, None
+        if mine >= OWN_SUGGEST and share < 0.5:
+            u.suggestion = "s"
+        elif mine < BLEED_SUGGEST and share >= 0.5:
+            u.suggestion = "b" if has_words else "w"
+            u.suggestion_source = source
+
+
 def new_triage(clip: Clip, session: Session, result: SessionResult) -> TriageFile:
+    from sessionscribe.core.cache import Cache
     from sessionscribe.core.pipeline.features import frame_samples
+    from sessionscribe.core.pipeline.ownership import compute_ownership
 
     cache_root = session.work_dir(result.settings.output.work_dir) / "cache"
     envelopes = session_envelopes(session, result, cache_root)
     units = build_units(result, envelopes, frame_samples(result.settings.bleed.frame_ms))
+    post = result.settings.model_copy(
+        update={"bleed": result.settings.bleed.model_copy(update={"mode": "post"})}
+    )
+    own = compute_ownership(session, post, Cache(cache_root))
+    ownership_suggestions(units, own, result.transcript.segments)
     return TriageFile(
         clip=clip.config.id,
         speakers=[p.id for p in session.participants],

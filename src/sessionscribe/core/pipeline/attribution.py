@@ -98,12 +98,20 @@ def _covered(start: int, end: int, segments: Sequence[TranscriptSegment]) -> flo
     return covered / max(1, end - start)
 
 
-def attribute_bleed(transcript: Transcript, own: Ownership, settings: BleedSettings) -> Transcript:
-    """Set ``ownership``; suppress evidenced bleed; flag low ownership / wrong speaker."""
+def attribute_bleed(
+    transcript: Transcript, own: Ownership, settings: BleedSettings, min_words: int = 3
+) -> Transcript:
+    """Set ``ownership``; suppress evidenced bleed; flag low ownership / wrong speaker.
+
+    Utterances shorter than ``min_words`` need ownership under ``SHORT_LOW`` (two people
+    can say the same short word at once).
+    """
     segs = [replace(s, ownership=round(segment_ownership(s, own), 3)) for s in transcript.segments]
     candidates: dict[int, str] = {}
     for n, seg in enumerate(segs):
-        if seg.ownership is None or seg.ownership >= settings.suppress_below:
+        short = len(normalize(seg.text).split()) < min_words
+        limit = min(settings.suppress_below, SHORT_LOW) if short else settings.suppress_below
+        if seg.ownership is None or seg.ownership >= limit:
             continue
         if owned_speech_samples(seg, own) >= OWNED_SPEECH_S * TIMELINE_RATE:
             continue  # own words inside (mixed): never suppressed, flagged low_ownership below
@@ -229,7 +237,7 @@ def mark_overlaps(transcript: Transcript, own: Ownership) -> Transcript:
 def apply_bleed_handling(
     transcript: Transcript, own: Ownership, bleed: BleedSettings, dedup_settings: DedupSettings
 ) -> Transcript:
-    out = attribute_bleed(transcript, own, bleed)
+    out = attribute_bleed(transcript, own, bleed, dedup_settings.min_words)
     out = dedup(out, dedup_settings, own)
     if dedup_settings.mark_overlaps:
         out = mark_overlaps(out, own)

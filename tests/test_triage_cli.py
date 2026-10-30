@@ -68,10 +68,15 @@ def test_loop_saves_after_every_label(tmp_path):
         echo=out.append,
     )
     final = t.read_triage(path)
-    assert [(u.label, u.source) for u in final.units] == [("s", None), ("b", "gm"), (None, None)]
+    assert [(u.label, u.source) for u in final.units] == [
+        ("s", None),
+        ("b", "gm"),
+        (None, None),
+        (None, None),
+    ]
     assert saved[1] == 1  # written right after the first label
     assert len(player.played) == 6  # unit 1, unit 2, replay, mix, other, unit 3
-    assert player.played[0] == (int(1.6 * 48_000), 48_000)  # 1 s unit + 2 x 0.3 s context
+    assert player.played[0] == (int(6.6 * 48_000), 48_000)  # 6 s unit + 2 x 0.3 s context
     assert any("Mesélő" in line and "suggestion: s (Enter)" in line for line in out)
     assert any(line.startswith("  ő0") for line in out)  # text on the terminal only
 
@@ -98,7 +103,7 @@ def test_triage_command_export_import_stats(tmp_path, fake_pipeline):
         "label",
         "source",
     ]
-    assert len(rows) == 3
+    assert len(rows) == 4
     rows[0]["label"] = "s"
     rows[1]["label"], rows[1]["source"] = "b", "gm"
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
@@ -111,13 +116,13 @@ def test_triage_command_export_import_stats(tmp_path, fake_pipeline):
     assert imported.exit_code == 0, imported.output
     assert "2 labels imported" in imported.output
     stats = runner.invoke(app, ["bench", "ref", "triage", str(clip.folder), "--stats"])
-    assert "2/3 labelled (draft); s 1, b 1" in stats.output
+    assert "2/4 labelled (draft); s 1, b 1" in stats.output
     rebuilt = runner.invoke(
         app, ["bench", "ref", "triage", str(clip.folder), "--rebuild", "--stats"]
     )
     assert "2 labels carried over" in rebuilt.output, rebuilt.output
     data = json.loads(t.triage_path(clip).read_text(encoding="utf-8"))
-    assert [u["label"] for u in data["units"]] == ["s", "b", None]
+    assert [u["label"] for u in data["units"]] == ["s", "b", None, None]
 
 
 @pytest.mark.audio_hw
@@ -141,7 +146,7 @@ def test_triage_score_command(tmp_path, fake_pipeline):
     clip = make_clip(tmp_path)
     runner.invoke(app, ["bench", "ref", "triage", str(clip.folder), "--stats"])
     triage = t.read_triage(t.triage_path(clip))
-    for u, label in zip(triage.units, ["s", "b", "s"], strict=True):
+    for u, label in zip(triage.units, ["s", "b", "b", "s"], strict=True):
         u.label = label
     t.write_triage(t.triage_path(clip), triage)
     out = tmp_path / "out.json"

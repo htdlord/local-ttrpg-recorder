@@ -15,6 +15,7 @@ from typing import Any, Literal
 from sessionscribe.core.bench.triage import SPEECH, TriageFile, TriageUnit, overlap_fraction
 
 Where = Literal["kept", "suppressed", "absent"]
+REVIEW_FLAGS = frozenset({"possible_duplicate", "low_ownership", "possible_wrong_speaker"})
 
 
 def _find(unit: TriageUnit, items: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
@@ -58,6 +59,7 @@ class TriageScore:
     speech_absent: int  # s/w/v/o neither kept nor suppressed (e.g. pre mode lost it)
     bleed_units: int
     residual_duplicates: float | None  # b kept
+    residual_flagged: float | None  # b kept but flagged for review (duplicate/ownership)
     overlap_units: int
     overlap_kept: float | None  # o kept
     overlap_marked: float | None  # o kept and marked overlap
@@ -103,6 +105,14 @@ def score_triage(triage: TriageFile, output: Mapping[str, Any]) -> TriageScore:
         speech_absent=count(speech, "absent"),
         bleed_units=len(bleed),
         residual_duplicates=_rate(count(bleed, "kept"), len(bleed)),
+        residual_flagged=_rate(
+            sum(
+                where[u.id][0] == "kept"
+                and bool(REVIEW_FLAGS & set((where[u.id][1] or {}).get("quality_flags", ())))
+                for u in bleed
+            ),
+            len(bleed),
+        ),
         overlap_units=len(overlap),
         overlap_kept=_rate(count(overlap, "kept"), len(overlap)),
         overlap_marked=_rate(marked, len(overlap)),
