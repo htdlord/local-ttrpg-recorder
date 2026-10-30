@@ -109,8 +109,9 @@ class SessionTab(QWidget):
         self.stack.addWidget(editor)
         outer.addWidget(self.stack, 1)
 
-        self.new_btn.clicked.connect(self.new_from_folder)
-        self.open_btn.clicked.connect(self.open_session)
+        # clicked(bool) would fill the optional path argument with ``checked``
+        self.new_btn.clicked.connect(lambda: self.new_from_folder())
+        self.open_btn.clicked.connect(lambda: self.open_session())
         self.save_btn.clicked.connect(self.save)
         self.add_btn.clicked.connect(lambda: self.table.insertRow(self.table.rowCount()))
         self.remove_btn.clicked.connect(self._remove_selected)

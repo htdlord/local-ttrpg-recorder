@@ -201,3 +201,49 @@ def test_superseded_export_and_close_leave_no_running_thread(qtbot, tmp_path):
     }
     w.close()
     assert workers.running() == 0
+
+
+def test_file_buttons_open_their_dialogs(qtbot, tmp_path, monkeypatch):
+    """Clicked through the real buttons: clicked(bool) must not reach the path argument."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from sessionscribe.gui.tabs import settings_tab
+
+    w, state = window(qtbot, tmp_path)
+    folder = recordings(tmp_path / "rec", n=2)
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(folder))
+    w.session_tab.new_btn.click()
+    assert state.session is not None and state.session.folder == folder
+    assert w.session_tab.save()
+
+    state.set_session(None)
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", lambda *a, **k: (str(folder / "session.toml"), "")
+    )
+    w.session_tab.open_btn.click()
+    assert state.session is not None and state.session.folder == folder
+
+    preset = tmp_path / "presets" / "mine.toml"
+    monkeypatch.setattr(settings_tab, "user_presets_dir", lambda: tmp_path / "presets")
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(preset), ""))
+    w.settings_tab.save_preset_btn.click()
+    assert preset.is_file()
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: "")
+    w.session_tab.new_btn.click()  # dialog cancelled: nothing changes
+    assert state.session.folder == folder
+
+
+def test_closing_during_a_run_does_not_hang(qtbot, tmp_path):
+    import time
+
+    from sessionscribe.gui import workers
+
+    w, _ = window(qtbot, tmp_path, factory=SlowFactory(0.4))
+    w.session_tab.new_from_folder(recordings(tmp_path / "rec", n=3, seconds=12.0))
+    w.session_tab.save()
+    w.run_tab.run_btn.click()
+    qtbot.waitUntil(lambda: w.run_tab.progress.value() > 0, timeout=20000)
+    t0 = time.monotonic()
+    w.close()  # cancels; completed chunks stay cached
+    assert time.monotonic() - t0 < 10 and workers.running() == 0

@@ -209,7 +209,7 @@ class SettingsTab(QWidget):
         self.preset.activated.connect(lambda _i: self.reset_to_preset())
         self.reset_btn.clicked.connect(self.reset_to_preset)
         self.save_btn.clicked.connect(self.save_to_session)
-        self.save_preset_btn.clicked.connect(self.save_as_preset)
+        self.save_preset_btn.clicked.connect(lambda: self.save_as_preset())  # not checked
         state.settings_changed.connect(self.refresh)
         state.session_changed.connect(self._session_changed)
         self._session_changed()

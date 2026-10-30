@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
 from sessionscribe.core.config import Settings
 from sessionscribe.core.events import Event, ProgressEvent, WarningEvent
@@ -144,7 +144,9 @@ def start(worker: QObject) -> QThread:
     for name in ("finished", "failed", "cancelled"):
         signal = getattr(worker, name, None)
         if signal is not None:
-            signal.connect(thread.quit)
+            # Direct (QThread.quit is thread-safe): queued to the GUI thread it would
+            # never arrive while stop_all() blocks that thread in wait().
+            signal.connect(thread.quit, Qt.ConnectionType.DirectConnection)
     thread.finished.connect(registry.release)
     registry.active[thread] = worker
     thread.start()
