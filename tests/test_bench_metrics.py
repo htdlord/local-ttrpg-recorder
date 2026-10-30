@@ -136,6 +136,9 @@ def test_matrix_m1_shape():
         "large-v3_float16_quality_wts",
         "large-v3_float16_quality_wts_own30",
         "large-v3_float16_quality_wts_own60",
+        "large-v3_float16_quality_wts_refill",
+        "large-v3_float16_quality_wts_own30_refill",
+        "large-v3_float16_quality_wts_own60_refill",
     ]
 
 

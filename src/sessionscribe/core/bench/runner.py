@@ -40,6 +40,8 @@ class Cell:
     parallel_kind: Literal["threads", "processes"] = "threads"
     # Chunked like the session pipeline (owned range in s); None = one piece per track.
     owned_s: float | None = None
+    # Re-transcribe word-less VAD speech as the session pipeline does (M2).
+    refill: bool = False
 
     @property
     def name(self) -> str:
@@ -53,6 +55,8 @@ class Cell:
             )
         if self.owned_s:
             parts.append(f"own{self.owned_s:g}")
+        if self.refill:
+            parts.append("refill")
         return "_".join(parts)
 
 
@@ -80,8 +84,9 @@ MATRICES: dict[str, Callable[[], list[Cell]]] = {
     "parallel": lambda: [Cell("large-v3", "float16", "quality"), *_parallel_cells()],
     # M2: chunk boundaries must not cost recall (owned 30/60 s vs whole tracks).
     "chunking": lambda: [
-        Cell("large-v3", "float16", "quality"),
-        *(Cell("large-v3", "float16", "quality", owned_s=s) for s in (30.0, 60.0)),
+        Cell("large-v3", "float16", "quality", owned_s=s, refill=r)
+        for r in (False, True)
+        for s in (None, 30.0, 60.0)
     ],
     # Smoke test of the harness: tiny model, both modes.
     "quick": lambda: [
@@ -150,6 +155,8 @@ def _cell_cmd(
         cmd += ["--batch-size", str(cell.batch_size)]
     if cell.owned_s:
         cmd += ["--owned-s", str(cell.owned_s)]
+    if cell.refill:
+        cmd.append("--refill")
     return cmd
 
 
@@ -301,6 +308,7 @@ def recommend_mode(cells: list[dict[str, Any]], clip_seconds: float) -> dict[str
             and c.get("metrics")
             and (s["model"], s["compute_type"], s["word_timestamps"]) == (model, ct, wts)
             and not s.get("owned_s")
+            and not s.get("refill")
         )
 
     qualities = [c for c in cells if default(c) and c["cell"]["mode"] == "quality"]

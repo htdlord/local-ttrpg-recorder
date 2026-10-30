@@ -480,7 +480,9 @@ def _progress_sink() -> Callable[[Event], None]:
 def _report(stats: RunStats, written: list[Path]) -> None:
     typer.echo(
         f"{stats.chunks} chunks: {stats.cached} from cache, {stats.transcribed} transcribed"
-        + (f", {stats.crashes} worker crash(es) recovered" if stats.crashes else ""),
+        + (f", {stats.crashes} worker crash(es) recovered" if stats.crashes else "")
+        + (f"; {stats.refilled} segment(s) recovered by re-transcription" if stats.refilled else "")
+        + (f"; {stats.missed} possible missed speech passage(s) to review" if stats.missed else ""),
         err=True,
     )
     for path in written:

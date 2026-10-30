@@ -16,6 +16,8 @@ REPETITION = "repetition"
 TOO_LONG = "too_long_for_duration"
 OUTSIDE_VAD = "outside_vad"
 OVERLAPS_GAP = "overlaps_gap"
+REFILLED = "refilled"  # text from re-transcribing word-less VAD speech; check it
+POSSIBLE_MISSED_SPEECH = "possible_missed_speech"  # VAD speech still without words
 # Filled from M3 on (bleed attribution / dedup).
 POSSIBLE_DUPLICATE = "possible_duplicate"
 LOW_OWNERSHIP = "low_ownership"
@@ -43,9 +45,9 @@ def quality_flags(
     gaps: Sequence[tuple[int, int]] = (),
 ) -> list[str]:
     """Flags for one segment in track-local time; ``vad=None`` means VAD was off."""
+    flags: list[str] = [REFILLED] if seg.refilled else []  # provenance: always shown
     if not settings.enabled:
-        return []
-    flags: list[str] = []
+        return flags
     if seg.avg_logprob < settings.low_logprob:
         flags.append(LOW_LOGPROB)
     if (

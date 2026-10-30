@@ -66,6 +66,7 @@ class Segment:
     compression_ratio: float
     temperature: float | None
     words: tuple[Word, ...] = ()
+    refilled: bool = False  # from re-transcribing a VAD stretch that got no words
 
 
 @dataclass(frozen=True)

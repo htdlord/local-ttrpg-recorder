@@ -25,7 +25,6 @@ from typing import Any
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    from sessionscribe.core.audio.reader import load_for_asr
     from sessionscribe.core.bench.clip import Clip, ClipTrack, active_seconds
     from sessionscribe.core.bench.resources import peak_rss_mb
     from sessionscribe.core.config import Settings, load_settings
@@ -53,7 +52,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "num_workers": args.workers,
                 },
                 # Fixed batch sizes: an OOM must show as a failed cell, not a quiet fallback.
-                "asr": {"mode": args.mode, "batch_size": args.batch_size, "oom_fallback": False},
+                "asr": {
+                    "mode": args.mode,
+                    "batch_size": args.batch_size,
+                    "oom_fallback": False,
+                    "refill_holes": args.refill,
+                },
                 "decoding": {"language": language, "word_timestamps": args.word_timestamps},
             },
         )
@@ -89,11 +93,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         def one(job: tuple[Clip, ClipTrack]) -> TranscriptionResult:
             clip, track = job
             engine = engines[clip.config.id]
-            if args.owned_s:
-                result = chunked(engine, clip.track_path(track), track.speaker, args.owned_s)
-            else:
-                audio, _ = load_for_asr(clip.track_path(track), max_duration_s=None)
-                result = engine.transcribe(audio, source_id=track.speaker)
+            path = clip.track_path(track)
+            result = chunked(engine, path, track.speaker, args.owned_s or 1e9)
             who = Speaker(track.speaker, track.speaker, Path(track.file).name)
             out_dir = Path(args.out) / clip.config.id
             write_outputs(result, engine.settings, who, out_dir, track.speaker, ("json",))
@@ -134,13 +135,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def chunked(engine: Any, path: Path, speaker: str, owned_s: float) -> Any:
-    """Transcribe one track chunk by chunk, as the session pipeline does (no cache)."""
+    """Transcribe one track chunk by chunk, as the session pipeline does (no cache).
+
+    A huge ``owned_s`` gives one chunk, i.e. the whole track as in M1. Refills of
+    word-less VAD speech follow ``asr.refill_holes``.
+    """
     from dataclasses import replace
 
     from sessionscribe.core.audio.track import VirtualTrack
     from sessionscribe.core.pipeline.asr import SpeechInterval
     from sessionscribe.core.pipeline.chunks import plan_chunks, resolve_chunks
     from sessionscribe.core.pipeline.features import envelope, frame_samples
+    from sessionscribe.core.pipeline.refill import refill_holes
     from sessionscribe.core.pipeline.worker import _shift, chunk_audio
     from sessionscribe.core.timeline import TIMELINE_RATE, rescale
 
@@ -157,10 +163,16 @@ def chunked(engine: Any, path: Path, speaker: str, owned_s: float) -> Any:
         context_s=s.asr.chunk_context_s,
         search_s=s.asr.chunk_boundary_search_s,
     )
-    parts = [engine.transcribe(chunk_audio(track, c), source_id=speaker) for c in chunks]
-    shifted = [
-        [_shift(seg, c.ctx_start) for seg in r.segments] for c, r in zip(chunks, parts, strict=True)
-    ]
+    parts = []
+    shifted = []
+    for c in chunks:
+        audio = chunk_audio(track, c)
+        r = engine.transcribe(audio, source_id=speaker)
+        owned = (c.owned_start - c.ctx_start, c.owned_end - c.ctx_start)
+        extra = refill_holes(engine, audio, r, s, source_id=speaker, owned=owned)
+        r = replace(r, transcribe_s=r.transcribe_s + extra.transcribe_s)
+        parts.append(r)
+        shifted.append([_shift(seg, c.ctx_start) for seg in [*r.segments, *extra.segments]])
     kept = [k for k in resolve_chunks(chunks, shifted) if not k.boundary_duplicate]
     vad = [
         SpeechInterval(
@@ -194,6 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=1, help="Parallel tracks (threads).")
     parser.add_argument("--track", action="append", help="clip_id/speaker to process.")
     parser.add_argument("--owned-s", type=float, help="Chunk like the session pipeline.")
+    parser.add_argument("--refill", action="store_true", help="Re-transcribe word-less speech.")
     args = parser.parse_args(argv)
     args.word_timestamps = bool(args.word_timestamps)
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
