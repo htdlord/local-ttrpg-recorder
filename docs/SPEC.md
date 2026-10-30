@@ -102,10 +102,11 @@ See §6.2 for the algorithm.
 
 - `bleed_mode`: `post` (default, non-destructive) | `pre` | `off`.
 - `coupling`: `auto` (estimated from the session, default) | `guided` (from mic check) | `manual`.
-- `ownership_margin_db` (default to tune in M3; start 6).
+- `ownership_margin_db` (6), `suppress_below` (0.5), `low_ownership_below` (0.6), `text_similarity` (70) – provisional defaults from clip01, to be fixed on clip02 (DECISIONS 2026-10-30).
 - `pre_attenuation_db` (pre mode only; default 15, test 12–18). `mute` is available only as an explicit expert option.
-- `frame_ms` (20), `hold_ms`, `release_ms`, `floor_db`.
-- Two built-in profiles: **Conservative** (default: post mode, low ownership threshold) and **Strong** (pre mode, attenuation).
+- `frame_ms` (20), `hold_ms` (ownership kept after a frame), `release_ms` (pre-mode gain ramp), `floor_above_noise_db` (10: per-track floor relative to the track's noise level, because mic gains differ by 15–20 dB), `coupling_min_frames`, `coupling_default_db`.
+- Two built-in profiles (presets): **`conservative`** (default: post mode) and **`strong`** (pre mode, 15 dB).
+- Session file: `[mic_check]` (participant → `[start_s, end_s]` where only they speak) for `guided`, `coupling_db` matrix for `manual`.
 
 ### 3.6 Dedup and overlap
 
@@ -151,21 +152,21 @@ Track readers (raw, untouched) ─► energy envelopes ─► coupling estimate 
 
 The coupling `C[i][j]` (dB) says how loud speaker *j*'s voice typically appears on mic *i* relative to mic *j*.
 
-- `auto`: from frames where exactly one track is clearly dominant, regress other tracks' energy against it; robust statistics (median), per mic pair. Needs no user action.
+- `auto`: per ordered pair, the lowest significant peak of the level difference `E_i − E_j` on frames where mic *j* is clearly above its own noise (*j*'s voice; *i*'s voice and third parties form higher peaks). Pair sums `C[i][j] + C[j][i]` are kept ≤ −20 dB; pairs without enough data use a conservative default and are reported. Needs no user action.
 - `guided`: 30 s mic check before recording – each participant speaks ~5 s in turn. Optional, improves `auto`.
 - Stored in the session manifest; shown as a small matrix in Advanced.
 
 ### 5.3 Ownership
 
 Per frame, track *i* **owns** the frame if
-`E_i ≥ floor` and `E_i ≥ max_j≠i (E_j + C[i][j]) + margin`,
-i.e. it is louder than the bleed we would expect from everyone else. Smoothed with hold/release. If two tracks own the same frame, both speakers are talking → overlap, both kept.
+`E_i ≥ floor_i` and `E_i ≥ max_j≠i (E_j + C[i][j]) + margin`,
+i.e. it is louder than the bleed we would expect from everyone else. `floor_i` is the track's own noise level + `floor_above_noise_db`. Ownership is held for `hold_ms`. If two tracks own the same frame, both may be talking; overlap marking (§5.5) also requires different words.
 
 This avoids the weakness of comparing against the single loudest track: a quiet speaker next to a loud one still owns their frames as long as they exceed the *predicted bleed*, not the neighbour's absolute level.
 
 ### 5.4 Bleed modes
 
-- **post (default):** ASR runs on raw audio (with VAD). Each word gets an ownership ratio from the mask; segments whose words are mostly not owned are marked `bleed` and excluded from txt/srt/vtt/md but kept in JSON with `suppression_reason="bleed"`. Changing bleed parameters only re-runs attribution – no re-transcription.
+- **post (default):** ASR runs on raw audio (with VAD). Each word gets an ownership ratio from the mask. A segment is suppressed as bleed (excluded from txt/srt/vtt/md, kept in JSON with `suppression_reason="bleed"` and `bleed_source`) only if: its ownership < `suppress_below` (< 0.2 for utterances under `min_words`), another track owns its frames, that track has words there, and its text matches those words (≥ `text_similarity`). Otherwise it is kept: as `possible_wrong_speaker` (with `probable_speaker`) when the other track has no words – the only copy –, and never when it contains ≥ 0.5 s of owned words (own speech mixed with bleed). Ownership < `low_ownership_below` is flagged `low_ownership`. Changing bleed parameters only re-runs attribution – no re-transcription.
 - **pre:** non-owned frames are attenuated (not muted) before VAD/ASR. Less compute, fewer bleed hallucinations, but parameter changes require re-ASR.
 - **off:** baseline; used as the reference in benchmarks.
 
@@ -176,13 +177,15 @@ A segment is removed as a duplicate only if **all** hold:
 2. energy/ownership evidence indicates one of them is bleed of the other (its frames are not owned, consistent with `C`);
 3. there is no evidence of two independent speakers (both tracks owning the frames → never dedup).
 
-Utterances shorter than `dedup_min_words` (e.g. two people shouting "Nem!") need strong energy evidence. Uncertain cases are **kept** and flagged `possible_duplicate`. Removed items go to `suppressed_duplicates` with `duplicate_of` and `suppression_reason`.
+Utterances shorter than `dedup_min_words` (e.g. two people shouting "Nem!") need strong energy evidence. A copy containing owned speech of its own is never removed. Uncertain cases are **kept** and flagged `possible_duplicate`; so are longer identical sentences that both tracks own (a third person whose own mic missed it). Removed items go to `suppressed` with `duplicate_of` and `suppression_reason="duplicate"`.
+
+**Overlap marking:** segments of different speakers overlapping ≥ 0.3 s, both owning the shared frames and saying different words, get `overlap=true` (md: ⟂); both are kept.
 
 Cross-correlation / spectral similarity between tracks may be explored in M3 as *additional* evidence only, never as a sole criterion.
 
 ### 5.6 Quality flags
 
-Segments are flagged (not deleted) when: low `avg_logprob`; high `no_speech_prob` together with a lowish `avg_logprob` (both are per 30 s decoding window); high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap; `refilled` (recovered by re-transcription, §5.1). VAD speech that stays without words is listed as `possible_missed_speech`. Flags appear in JSON, in md as a marker, and in the GUI review list.
+Segments are flagged (not deleted) when: `possible_wrong_speaker` (another mic owns it, this is the only copy); low `avg_logprob`; high `no_speech_prob` together with a lowish `avg_logprob` (both are per 30 s decoding window); high compression ratio / repeated n-grams; text far too long for the voiced duration; segment outside VAD speech; possible duplicate; low ownership; overlaps a recording gap; `refilled` (recovered by re-transcription, §5.1). VAD speech that stays without words is listed as `possible_missed_speech`. Flags appear in JSON, in md as a marker, and in the GUI review list.
 
 ### 5.7 Cache
 

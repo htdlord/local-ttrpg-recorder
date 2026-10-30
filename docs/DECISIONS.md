@@ -384,3 +384,83 @@ M3 order (owner decision): the triage tool first, in its own PR, so labelling ca
 - **Terminal:**
   - single keys via `msvcrt` (Windows) or `termios` (Linux); outside a TTY there is a clear error pointing to `--export/--import`;
   - playback via `sounddevice`, which disables itself with one warning if audio fails.
+
+## 2026-10-30 – M3 phase C: bleed handling (provisional until clip02)
+
+Owner decision: developed and tested on synthetic data and measured on the clip01 triage reference without waiting for clip02. **Every default and tolerance below is provisional**; they are re-measured and fixed when clip02 (≥ 5 min, triage-labelled) arrives.
+
+### clip01 triage labels
+
+81 units: 29 `s`, 34 `b`, 3 `w`, 7 `v`, 7 `n`, 1 `?`, 0 `o`.
+
+- Suggestion acceptance was 0 % at 15.8 s mean (5.1 s median) per unit.
+- 13 of the 34 `b` units name a source with no words on its own track: `seat_4` 8, `seat_2` 5, `seat_1` 5. Those mics are silent or very low gain.
+- There are no overlap labels, so the overlap criterion is only checked synthetically here.
+
+### Algorithm, as measured
+
+- **Coupling `C[i][j]`:** the lowest significant peak (≥ 1 s of frames) of `E_i − E_j` on the frames where mic j is ≥ 15 dB above its own noise. On those frames the difference clusters at `C[i][j]` (j speaks), `−C[j][i]` (i speaks) and third-party values in between.
+  - Two earlier designs failed on clip01:
+    - dominance of relative levels: every pair fell back to the default, because a silent track's "speech level" is its bleed;
+    - a low percentile: about 5 dB too low, so masks owned bleed.
+  - Pair sums are clamped to `C[i][j] + C[j][i] ≤ −20 dB` (two acoustic paths; the gains cancel). Clamped or default pairs are reported as weak; clip01 has 30 of 42, mostly silent mics.
+  - Guided coupling comes from the session's `[mic_check]`, manual coupling from `coupling_db`.
+- **Ownership:**
+  - `E_i ≥ floor_i` and `E_i ≥ max_j(E_j + C[i][j]) + margin`, held for `hold_ms`.
+  - `floor_i` is the track's noise level (10th percentile of non-silent frames) + 10 dB, **per track** (owner request, because mic gains differ by 15–20 dB). The absolute `bleed.floor_db` is gone (settings schema 2, migration drops it).
+  - A cap at speech level − 20 dB was tried and removed: a silent, noisy mic then owned 99 % of frames.
+  - Cached in an `ownership` layer, keyed by track fingerprints, offsets, coupling inputs and bleed parameters.
+- **Post mode: a segment is bleed only with four pieces of evidence**, otherwise it is kept:
+  1. ownership < `suppress_below` (0.5), or < 0.2 for utterances under `min_words`;
+  2. another track owns ≥ 50 % of its frames;
+  3. that track's kept words cover ≥ 50 % of it;
+  4. its text matches those words (partial ratio ≥ `bleed.text_similarity`, 70).
+  - **When evidence is missing:**
+    - without 3, the segment is the only copy: `possible_wrong_speaker` plus `probable_speaker`;
+    - without 4 (e.g. a short own interjection while the other speaks) it is kept;
+    - a segment with ≥ 0.5 s of owned words (own speech + bleed, triage `v`) is never suppressed;
+    - ownership < 0.6 is flagged `low_ownership`.
+  - Text evidence was added after clip01: ownership alone dropped a 0.4 s own utterance.
+- **Dedup:**
+  - It removes a cross-track text duplicate (ratio ≥ 85, ≤ 1 s apart) only with ownership evidence: < 0.5 vs ≥ 0.5, or < 0.2 vs > 0.8 for short ones.
+  - It never removes a mixed segment.
+  - If both copies own their frames, a short word means two people said it and both are kept; a longer sentence means a third person heard on two mics (clip01's `seat_4` case), and both are kept and flagged `possible_duplicate`.
+- **Overlap:** different speakers ≥ 0.3 s together, both owning the shared frames, and different words (ratio < 60). With ownership alone, 51 of 70 clip01 segments were marked; now 23. This is unverified until clip02 has `o` labels.
+- **Pre mode:** non-owned frames are attenuated by `pre_attenuation_db` before ASR (10 ms ramps, falling back over `release_ms`; silence only with `mute`). The ASR key includes the ownership key. Presets: `conservative` = post (the default), `strong` = pre, 15 dB.
+- **Triage suggestions now come from ownership:** `s` ≥ 0.8; `b` (or `w` without source words) < 0.2 with another owner. On clip01, 15 units got a suggestion and 12 of them matched the label, against 5 of 16 for the level rules.
+- **Cache:** adding the `pre` field to the ASR key invalidated earlier ASR caches once.
+
+### clip01 matrix (`bench bleed`)
+
+Speech = s/w/v/o, 39 units; bleed = b, 34 units.
+
+| variant | recall % | false suppr. % | residual dup. % | of which flagged % |
+|---|---|---|---|---|
+| off | 100.0 | 0.0 | 100.0 | 0.0 |
+| post m3 s0.5 | 100.0 | 0.0 | 97.1 | 32.4 |
+| post m6 s0.3 | 100.0 | 0.0 | 91.2 | 38.2 |
+| **post m6 s0.5 (default)** | **100.0** | **0.0** | **88.2** | **35.3** |
+| post m9 s0.5 | 94.9 | 5.1 | 79.4 | – |
+| pre a12 | 94.9 | 2.6 | 97.1 | 35.3 |
+| pre a18 | 97.4 | 0.0 | 94.1 | 26.5 |
+
+### Provisional tolerances (vs `off`)
+
+- speech recall drop ≤ 2 pp;
+- false suppression ≤ 3 %;
+- no `w` unit suppressed;
+- residual duplicates at least halved.
+
+On clip01 one speech unit is 2.6 pp, so the default may lose none. **The default meets the first three, but not the fourth: residual duplicates drop only from 100 % to 88 %.** About a third of the residue is flagged for review.
+
+The main reasons:
+- 13 of 34 bleed units come from participants whose own track has no words, so they are protected as possible only copies;
+- the GM and `seat_3` mics are strongly coupled both ways.
+
+More aggressive settings (margin 9) cut more but lose speech. Following "losing speech is worse than a duplicate", the provisional default stays post m6 s0.5.
+
+### Open tasks (M3)
+
+- [ ] clip02: triage, `bench bleed`, fix tolerances and defaults (including overlap, which clip01 cannot test).
+- [ ] Bleed from participants whose own mic records nothing (clip01 `seat_2`/`seat_4`): consider keeping one copy, reassigned, and marking the other as its duplicate. Needs data on how often this happens and an owner decision.
+- [ ] The weak-pair warning is noisy for sessions with silent mics: count pairs whose voice actually speaks.

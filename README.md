@@ -76,7 +76,12 @@ uv run sessionscribe bench run --refs bench/refs --matrix m1   # writes work/ben
 uv run sessionscribe bench score work/bench/<run>              # re-score without ASR
 uv run sessionscribe bench ref triage bench/refs/clip01         # label segments by ear (M3)
 uv run sessionscribe bench triage score bench/refs/clip01 out.json
+uv run sessionscribe bench bleed bench/refs/clip01               # off vs post/pre on the triage
 ```
+
+Bleed handling defaults to `post` (attribution after ASR, never re-transcribes); the
+`strong` preset uses `pre` mode. A `[mic_check]` table in `session.toml` (participant →
+time range where only they speak) enables `bleed.coupling = "guided"`.
 
 CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
 (`uv sync --extra cuda`) or a system CUDA/cuDNN; `doctor` shows where each library was found.
