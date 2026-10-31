@@ -83,6 +83,41 @@ def clip_init(
     )
 
 
+def _clock(text: str) -> float:
+    """Seconds from ``h:mm:ss``, ``mm:ss`` or plain seconds."""
+    try:
+        value = 0.0
+        for part in text.strip().split(":"):
+            value = value * 60 + float(part)
+    except ValueError as exc:
+        raise typer.BadParameter(f"{text!r}: use h:mm:ss, mm:ss or seconds") from exc
+    return value
+
+
+@clip_app.command("cut")
+def clip_cut(
+    folder: ClipArg,
+    session: Annotated[Path, typer.Option("--session", "-s", help="session.toml (or its folder).")],
+    start: Annotated[str, typer.Option(help="Session time, e.g. 1:23:00.")],
+    minutes: Annotated[float, typer.Option(help="Length of the clip.")] = 5.0,
+    language: Annotated[str, typer.Option(help="Language of the clip (hu, en, ...).")] = "hu",
+) -> None:
+    """Cut a stretch of a recorded session into a new clip folder (all tracks, aligned)."""
+    from sessionscribe.core.bench.clip import cut_clip
+    from sessionscribe.core.session import Session
+
+    if (folder / "clip.toml").exists():
+        raise _fail(f"{folder / 'clip.toml'} exists; choose a new clip folder")
+    try:
+        config = cut_clip(Session.load(session), folder, _clock(start), minutes * 60, language)
+    except (OSError, ValueError) as exc:
+        raise _fail(str(exc)) from exc
+    typer.echo(
+        f"Wrote {folder}: {len(config.tracks)} tracks ({', '.join(config.speakers)}), "
+        f"{config.duration_s:.2f} s from {start}, language {config.language}"
+    )
+
+
 @ref_app.command("import")
 def ref_import(
     folder: ClipArg,

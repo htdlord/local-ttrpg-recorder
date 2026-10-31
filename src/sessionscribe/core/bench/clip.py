@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sessionscribe.core.audio.reader import track_info
 from sessionscribe.core.config import read_toml
 from sessionscribe.core.fileio import atomic_write_text
+
+if TYPE_CHECKING:
+    from sessionscribe.core.session import Session
 
 CLIP_FILE = "clip.toml"
 TRACK_NAME = re.compile(r"^ch(?P<channel>\d+)_(?P<speaker>[A-Za-z0-9_]+)$")
@@ -142,3 +146,49 @@ def active_seconds(path: Path) -> float:
         active += int(np.count_nonzero(np.sqrt(np.mean(frames**2, axis=1)) > threshold))
         rest = data[n * frame :]
     return active * frame / info.samplerate
+
+
+def cut_clip(
+    session: Session,
+    folder: Path,
+    start_s: float,
+    duration_s: float,
+    language: str,
+) -> ClipConfig:
+    """Cut ``[start_s, start_s + duration_s)`` of session time from every participant's
+    track (segment folders and offsets resolved) into a new clip folder.
+
+    Tracks are written as 24-bit FLAC ``tracks/chNN_<participant>.flac`` in participant
+    order; stretches outside a track (offset, end of recording) are written as silence so
+    every track covers the same time. The originals are only read.
+    """
+    import numpy as np
+    import soundfile as sf
+
+    if duration_s <= 0 or start_s < 0:
+        raise ValueError("need start >= 0 and a positive duration")
+    tracks_dir = folder / "tracks"
+    if tracks_dir.exists() and any(tracks_dir.iterdir()):
+        raise FileExistsError(f"{tracks_dir} is not empty")
+    tracks_dir.mkdir(parents=True, exist_ok=True)
+    names: dict[int, str] = {}
+    for i, participant in enumerate(session.participants, start=1):
+        track = session.open_track(participant)
+        rate = track.samplerate
+        frames = round(duration_s * rate)
+        first = round((start_s - participant.offset_s) * rate)  # track-local
+        lead = min(frames, max(0, -first))
+        path = tracks_dir / f"ch{i:02d}_{participant.id}.flac"
+        with sf.SoundFile(
+            str(path), "w", samplerate=rate, channels=1, format="FLAC", subtype="PCM_24"
+        ) as out:
+            if lead:
+                out.write(np.zeros(lead, np.float32))
+            written = lead
+            for block in track.blocks(max(0, first), frames - lead):
+                out.write(block)
+                written += len(block)
+            if written < frames:
+                out.write(np.zeros(frames - written, np.float32))
+        names[i] = participant.name
+    return init_clip(folder, language, names)
