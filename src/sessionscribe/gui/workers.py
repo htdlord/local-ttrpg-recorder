@@ -105,6 +105,24 @@ class DoctorWorker(QObject):
         self.finished.emit(report)
 
 
+class DevicesWorker(QObject):
+    """Input devices from a short-lived recorder process (the GUI never loads PortAudio)."""
+
+    finished = Signal(list)
+    failed = Signal(str)
+
+    @Slot()
+    def run(self) -> None:
+        from sessionscribe.core.audio.control import query_devices
+
+        try:
+            devices = query_devices()
+        except Exception as exc:  # shown in the tab
+            self.failed.emit(str(exc))
+            return
+        self.finished.emit(devices)
+
+
 class _Registry(QObject):
     """Keeps every running worker and its thread alive until the thread has finished.
 

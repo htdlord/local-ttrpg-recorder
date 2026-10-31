@@ -62,7 +62,7 @@ def window(qtbot, tmp_path, factory=None, log=None):
 
 def test_window_starts_with_empty_states(qtbot, tmp_path):
     w, _ = window(qtbot, tmp_path)
-    assert w.tabs.count() == 4
+    assert w.tabs.count() == 5
     assert w.session_tab.stack.currentIndex() == 0  # empty state
     assert w.result_tab.stack.currentIndex() == 0
     assert not w.run_tab.run_btn.isEnabled()
@@ -175,7 +175,7 @@ def test_settings_are_mode_aware(qtbot, tmp_path):
 def test_theme_switch_rebuilds_the_window(qtbot, tmp_path):
     w, _ = window(qtbot, tmp_path)
     w.set_preference("theme", "dark")
-    assert w.tokens.background == "#14181d" and w.tabs.count() == 4
+    assert w.tokens.background == "#14181d" and w.tabs.count() == 5
     w.set_preference("theme", "light")
     assert w.tokens.background == "#f4f6f8"
 

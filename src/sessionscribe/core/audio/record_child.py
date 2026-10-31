@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import logging
 import os
 import threading
@@ -29,11 +30,13 @@ from sessionscribe.core.audio import control
 log = logging.getLogger(__name__)
 STATUS_EVERY_S = 0.25
 TEST_OPENER_ENV = "SESSIONSCRIBE_TEST_OPENER"
+TEST_DEVICES_ENV = "SESSIONSCRIBE_TEST_DEVICES"
 
 
 def _parse(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="record_child")
-    p.add_argument("--session", type=Path, required=True)
+    p.add_argument("--list-devices", action="store_true", help="Print input devices as JSON.")
+    p.add_argument("--session", type=Path)
     p.add_argument("--rig", type=Path)
     p.add_argument("--device")
     p.add_argument("--host-api")
@@ -118,8 +121,36 @@ class Reporter:
             log.warning("event write failed", exc_info=True)
 
 
+def list_devices() -> list[dict[str, Any]]:
+    """Input devices for the GUI, which does not load PortAudio itself (an ASIO driver
+    serves one client at a time)."""
+    fake = os.environ.get(TEST_DEVICES_ENV)
+    if fake:
+        return list(json.loads(fake))
+    import sys
+
+    from sessionscribe.core.audio.backend import list_input_devices, load_sounddevice
+
+    sd = load_sounddevice(enable_asio=sys.platform == "win32")
+    return [
+        {
+            "name": d.name,
+            "host_api": d.host_api,
+            "channels": d.max_input_channels,
+            "samplerate": d.default_samplerate,
+        }
+        for d in list_input_devices(sd)
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse(argv)
+    if args.list_devices:
+        print(json.dumps(list_devices()))
+        return 0
+    if args.session is None:
+        log.error("--session is required")
+        return 2
     session = args.session.resolve()
     folder = control.control_dir(session)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
