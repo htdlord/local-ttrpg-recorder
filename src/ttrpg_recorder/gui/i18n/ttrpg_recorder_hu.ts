@@ -4,37 +4,37 @@
 <context>
     <name>AboutDialog</name>
     <message>
-        <location filename="../main_window.py" line="59" />
-        <source>About SessionScribe</source>
-        <translation>A SessionScribe névjegye</translation>
+        <location filename="../main_window.py" line="60" />
+        <source>About Local TTRPG Recorder</source>
+        <translation>A Local TTRPG Recorder névjegye</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="70" />
+        <location filename="../main_window.py" line="71" />
         <source>Local multi-track speech-to-text for tabletop RPG sessions.</source>
         <translation>Helyi, többsávos beszédfelismerés asztali szerepjáték-sessionökhöz.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="72" />
+        <location filename="../main_window.py" line="73" />
         <source>Own code: MIT licence. Third-party packages keep their own licences; PySide6/Qt is LGPLv3 and installed as replaceable libraries.</source>
         <translation>Saját kód: MIT-licenc. A külső csomagok saját licencük alatt állnak; a PySide6/Qt LGPLv3, és cserélhető könyvtárként települ.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="76" />
+        <location filename="../main_window.py" line="77" />
         <source>Participants' voices are personal data: whoever records is responsible for informing participants and obtaining consent where required.</source>
         <translation>A résztvevők hangja személyes adat: aki felvételt készít, annak a felelőssége a résztvevők tájékoztatása és – ahol szükséges – a hozzájárulásuk beszerzése.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="84" />
+        <location filename="../main_window.py" line="85" />
         <source>Third-party notices</source>
         <translation>Külső licencek</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="86" />
+        <location filename="../main_window.py" line="87" />
         <source>About Qt</source>
         <translation>A Qt névjegye</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="88" />
+        <location filename="../main_window.py" line="89" />
         <source>Close</source>
         <translation>Bezárás</translation>
     </message>
@@ -70,125 +70,130 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../main_window.py" line="176" />
+        <location filename="../main_window.py" line="177" />
         <source>Session</source>
         <translation>Session</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="177" />
+        <location filename="../main_window.py" line="178" />
         <source>Record</source>
         <translation>Felvétel</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="178" />
+        <location filename="../main_window.py" line="179" />
         <source>Settings</source>
         <translation>Beállítások</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="179" />
+        <location filename="../main_window.py" line="180" />
         <source>Run</source>
         <translation>Futtatás</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="180" />
+        <location filename="../main_window.py" line="181" />
         <source>Result</source>
         <translation>Eredmény</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="196" />
+        <location filename="../main_window.py" line="197" />
         <source>&amp;File</source>
         <translation>&amp;Fájl</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="197" />
+        <location filename="../main_window.py" line="198" />
         <source>New session from folder…</source>
         <translation>Új session mappából…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="199" />
+        <location filename="../main_window.py" line="200" />
         <source>Open session…</source>
         <translation>Session megnyitása…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="201" />
+        <location filename="../main_window.py" line="202" />
         <source>Recent sessions</source>
         <translation>Legutóbbi sessionök</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="204" />
+        <location filename="../main_window.py" line="205" />
         <source>Quit</source>
         <translation>Kilépés</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="207" />
+        <location filename="../main_window.py" line="208" />
         <source>&amp;Tools</source>
         <translation>&amp;Eszközök</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="208" />
+        <location filename="../main_window.py" line="209" />
         <source>System check…</source>
         <translation>Rendszerellenőrzés…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="211" />
+        <location filename="../main_window.py" line="212" />
         <source>&amp;View</source>
         <translation>&amp;Nézet</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="212" />
+        <location filename="../main_window.py" line="213" />
         <source>Theme</source>
         <translation>Téma</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="217" />
-        <location filename="../main_window.py" line="227" />
+        <location filename="../main_window.py" line="218" />
+        <location filename="../main_window.py" line="228" />
         <source>System</source>
         <translation>Rendszer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="218" />
+        <location filename="../main_window.py" line="219" />
         <source>Light</source>
         <translation>Világos</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="219" />
+        <location filename="../main_window.py" line="220" />
         <source>Dark</source>
         <translation>Sötét</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="222" />
+        <location filename="../main_window.py" line="223" />
         <source>Language</source>
         <translation>Nyelv</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="233" />
+        <location filename="../main_window.py" line="234" />
         <source>&amp;Help</source>
         <translation>&amp;Súgó</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="234" />
-        <source>About SessionScribe…</source>
-        <translation>A SessionScribe névjegye…</translation>
+        <location filename="../main_window.py" line="235" />
+        <source>About Local TTRPG Recorder…</source>
+        <translation>A Local TTRPG Recorder névjegye…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="291" />
+        <location filename="../main_window.py" line="242" />
+        <source>'{0}' is deprecated and will be removed after {1}; start it as '{2}'.</source>
+        <translation>A(z) „{0}” parancs elavult, a(z) {1} után megszűnik; indítsd így: „{2}”.</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="346" />
+        <source>The recording continues in the background after the window closes. Open Local TTRPG Recorder again to follow or stop it. Close the window?</source>
+        <translation>Az ablak bezárása után a felvétel a háttérben folytatódik. Követni vagy leállítani a Local TTRPG Recorder újbóli megnyitásával tudod. Bezárod az ablakot?</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="301" />
         <source>Open session</source>
         <translation>Session megnyitása</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="325" />
+        <location filename="../main_window.py" line="335" />
         <source>No session open</source>
         <translation>Nincs megnyitott session</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="334" />
+        <location filename="../main_window.py" line="344" />
         <source>Recording in progress</source>
         <translation>Felvétel folyamatban</translation>
-    </message>
-    <message>
-        <location filename="../main_window.py" line="336" />
-        <source>The recording continues in the background after the window closes. Open SessionScribe again to follow or stop it. Close the window?</source>
-        <translation>Az ablak bezárása után a felvétel a háttérben folytatódik. Követni vagy leállítani a SessionScribe újbóli megnyitásával tudod. Bezárod az ablakot?</translation>
     </message>
 </context>
 <context>
@@ -1452,37 +1457,37 @@
 <context>
     <name>SystemCheckDialog</name>
     <message>
-        <location filename="../main_window.py" line="103" />
+        <location filename="../main_window.py" line="104" />
         <source>System check</source>
         <translation>Rendszerellenőrzés</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="107" />
+        <location filename="../main_window.py" line="108" />
         <source>Checking the environment …</source>
         <translation>A környezet ellenőrzése …</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="111" />
+        <location filename="../main_window.py" line="112" />
         <source>Status</source>
         <translation>Állapot</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="111" />
+        <location filename="../main_window.py" line="112" />
         <source>Check</source>
         <translation>Ellenőrzés</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="111" />
+        <location filename="../main_window.py" line="112" />
         <source>Result</source>
         <translation>Eredmény</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="116" />
+        <location filename="../main_window.py" line="117" />
         <source>Close</source>
         <translation>Bezárás</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="137" />
+        <location filename="../main_window.py" line="138" />
         <source>System check finished: {0}</source>
         <translation>A rendszerellenőrzés kész: {0}</translation>
     </message>

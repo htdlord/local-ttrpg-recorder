@@ -33,10 +33,11 @@ from ttrpg_recorder.gui.tabs.settings_tab import SettingsTab
 from ttrpg_recorder.gui.widgets import button, label
 from ttrpg_recorder.gui.workers import DoctorWorker, ProcessWorker, start
 
-ORG = "Local TTRPG Recorder"
+APP_NAME = "Local TTRPG Recorder"
+ORG = APP_NAME
 MAX_RECENT = 8
 NOTICES = "THIRD_PARTY_NOTICES.md"
-NOTICES_URL = "https://github.com/htdlord/sessionscribe/blob/main/" + NOTICES
+NOTICES_URL = "https://github.com/htdlord/local-ttrpg-recorder/blob/main/" + NOTICES
 
 
 def notices_url() -> QUrl:
@@ -56,12 +57,12 @@ class AboutDialog(QDialog):
         from ttrpg_recorder import __version__
 
         super().__init__(parent)
-        self.setWindowTitle(self.tr("About SessionScribe"))
+        self.setWindowTitle(self.tr("About Local TTRPG Recorder"))
         self.open_url: Callable[[QUrl], bool] = QDesktopServices.openUrl
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 16)
         layout.setSpacing(8)
-        layout.addWidget(label(f"SessionScribe {__version__}", heading=True))
+        layout.addWidget(label(f"Local TTRPG Recorder {__version__}", heading=True))
         libs = [f"{name} {version(name)}" for name in ("faster-whisper", "ctranslate2")]
         libs.append(f"PySide6 {PySide6.__version__}")
         self.versions = label(", ".join(libs), muted=True)
@@ -148,7 +149,7 @@ class MainWindow(QMainWindow):
         self.state = state or AppState()
         self.prefs = settings or QSettings(ORG, ORG)
         self.player = player
-        self.setWindowTitle("SessionScribe")
+        self.setWindowTitle(APP_NAME)
         self.resize(1200, 800)
         self._current_export: ProcessWorker | None = None
         self.confirm_close: Callable[[], bool] = self._ask_close
@@ -231,7 +232,7 @@ class MainWindow(QMainWindow):
         )
 
         help_menu = bar.addMenu(self.tr("&Help"))
-        about = help_menu.addAction(self.tr("About SessionScribe…"))
+        about = help_menu.addAction(self.tr("About Local TTRPG Recorder…"))
         about.triggered.connect(self.about)
 
     def show_deprecated_alias(self, old: str) -> None:
@@ -330,7 +331,7 @@ class MainWindow(QMainWindow):
 
     def _update_title(self) -> None:
         s = self.state.session
-        self.setWindowTitle(f"SessionScribe - {s.name}" if s else "SessionScribe")
+        self.setWindowTitle(f"{APP_NAME} - {s.name}" if s else APP_NAME)
         self.statusBar().showMessage(str(s.folder) if s else self.tr("No session open"))
 
     def _recorded(self, folder: Path) -> None:
@@ -343,7 +344,7 @@ class MainWindow(QMainWindow):
             self.tr("Recording in progress"),
             self.tr(
                 "The recording continues in the background after the window closes. "
-                "Open SessionScribe again to follow or stop it. Close the window?"
+                "Open Local TTRPG Recorder again to follow or stop it. Close the window?"
             ),
         )
         return answer == QMessageBox.StandardButton.Yes

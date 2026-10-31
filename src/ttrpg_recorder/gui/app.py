@@ -20,7 +20,7 @@ def main(deprecated_alias: str | None = None) -> int:
     from ttrpg_recorder.gui.prefs import LEGACY_ORG, migrate_prefs
 
     app = QApplication(sys.argv)
-    app.setApplicationName("SessionScribe")
+    app.setApplicationName(ORG)
     app.setOrganizationName(ORG)
     prefs = QSettings(ORG, ORG)
     migrate_prefs(prefs, QSettings(LEGACY_ORG, LEGACY_ORG))
