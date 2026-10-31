@@ -6,12 +6,12 @@ Releases are git tags with a GitHub release; users install from the tag
 ## Gate for v0.1.0
 
 v0.1.0 is tagged only after the defaults are confirmed on real data (owner decision,
-2026-10-31):
+2026-10-31). The owner's step-by-step list for the session day and the clip02 work is
+[dev/OWNER_SESSION_TASKS.md](dev/OWNER_SESSION_TASKS.md).
 
 - [ ] First real session recorded with the Record tab or `record start`; `record verify`
       clean (or every gap explained).
-- [ ] clip02 cut from it (`bench clip cut`, [SESSION_CHECKLIST_HU.md](SESSION_CHECKLIST_HU.md))
-      and triaged (`bench ref triage`).
+- [ ] clip02 cut from it (`bench clip cut`) and triaged (`bench ref triage`).
 - [ ] M1 benchmark repeated on the ≥ 5 min clip; default ASR mode confirmed (SPEC §15).
 - [ ] Bleed defaults (ownership margin, attenuation, dedup) and the M3 tolerances fixed
       from clip01 + clip02 and written to DECISIONS; `processing_version` bumped if
