@@ -46,7 +46,7 @@ def spawn(tmp_path, *args, scenario="steady"):
     session = tmp_path / "session"
     proc = control.spawn_recorder(
         session,
-        ["--rig", str(rig(tmp_path)), "--noise-s", "1", "--turn-s", "1", *args],
+        ["--rig", str(rig(tmp_path)), "--hours", "0.1", "--noise-s", "1", "--turn-s", "1", *args],
         env=env(scenario),
         cwd=ROOT,
     )
@@ -129,7 +129,7 @@ def test_recording_goes_on_when_the_gui_dies_and_a_new_gui_reconnects(tmp_path):
                 from sessionscribe.core.audio import control
                 control.spawn_recorder(
                     Path({str(session)!r}),
-                    ["--rig", {str(rig(tmp_path))!r}, "--no-check"],
+                    ["--rig", {str(rig(tmp_path))!r}, "--hours", "0.1", "--no-check"],
                     cwd=Path({str(ROOT)!r}),
                 )
                 time.sleep(120)

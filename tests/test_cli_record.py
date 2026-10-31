@@ -143,7 +143,9 @@ def test_open_failure_is_a_clear_error_not_a_hang(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_record, "_opener", lambda setup: Broken([Scenario()]))
     base = ["--device", "x", "--host-api", "asio", "--channels", "1-2", "--names", "gm,anna"]
     t0 = time.monotonic()
-    result = runner.invoke(app, ["record", "start", "--session", str(tmp_path / "s"), *base])
+    result = runner.invoke(
+        app, ["record", "start", "--session", str(tmp_path / "s"), "--hours", "0.1", *base]
+    )
     assert result.exit_code == 1 and "another program using the ASIO driver" in result.output
     check = runner.invoke(app, ["record", "check", *base])
     assert check.exit_code == 1 and "Failed to load ASIO driver" in check.output
