@@ -2,6 +2,9 @@
 
 Short entries: date, decision, reason, alternatives considered.
 
+The project was called **SessionScribe** until 2026-10-31 (see "Renamed to Local TTRPG
+Recorder"); earlier entries keep the old name and commands as they were at the time.
+
 ## 2026-10-29 – initial plan (v0.1)
 
 - **Multi-track transcription instead of diarization.** One lavalier mic and track per participant; transcribe per track and merge. Diarization of mixed audio is a later feature.
@@ -628,3 +631,35 @@ Implementation:
 - **Third-party notices** generated from the installed environment with `importlib.metadata` (no new dependency): 50 packages with the `gui` and `cuda` extras. Licence texts are deduplicated; texts over 20 KB (onnxruntime's bundled notices, 339 KB) are referenced instead of copied. A fast test checks that every dependency and extra in `pyproject.toml` is listed. Shown from the GUI's new About dialog.
 - **Demo session** (`sessionscribe demo`): four LibriVox volunteers from Short Story Collection Vol. 014 (public domain; authors died 1817–1912, so the texts are public domain in the EU too) as fictional players. Only the first 1.5 MB of each MP3 is fetched (HTTP Range, pinned SHA-256); archive.org returned sporadic 500s, so downloads retry 5xx and network errors. The audio is not committed.
   - **Bleed simulation:** clean copies at −19…−30 dB over a −66 dBFS floor were transcribed almost word for word on every track (most segments flagged `low_ownership`, few suppressed), which is not what lavaliers give. Copies are now low-passed (~3 kHz) with a short room tail, the coupling is −27…−38 dB and the room tone −52 dBFS (pinkish). Result with the defaults: 17 segments, 2 suppressed, the mic-check turns attributed correctly, a few flagged Whisper fillers ("Thank you.") on near-silence kept for review. Not a benchmark: the voices are read text, the bleed is synthetic.
+
+## 2026-10-31 – Renamed to Local TTRPG Recorder (owner decision)
+
+Closes "Project name" in SPEC §15; "SessionScribe" was a working title.
+
+**Reasons:**
+- **A descriptive name.** It says what the program is: local (offline), for tabletop RPG sessions, records and transcribes. The commands are short.
+- **A name clash.** The owner checked by web search: at least three other projects use the name SessionScribe, among them a transcription tool for therapy sessions and a Claude Code plugin.
+
+**Names:**
+
+| | Name |
+|---|---|
+| Display | Local TTRPG Recorder |
+| GitHub repository | `local-ttrpg-recorder` |
+| Distribution | `local-ttrpg-recorder` (same as the repository; `[tool.uv.build-backend] module-name` points to the shorter package) |
+| Import package | `ttrpg_recorder` |
+| Commands | `ttrpg`, `ttrpg-gui` |
+| Test variables | `TTRPG_RECORDER_TEST_*` |
+| Per-user folder | `local-ttrpg-recorder` |
+| QSettings organisation | "Local TTRPG Recorder" |
+
+**Compatibility:**
+- **Old commands.** `sessionscribe` and `sessionscribe-gui` stay as deprecated aliases through v0.1.0. They warn on stderr; the GUI also warns in the status bar. They are removed in the first release after v0.1.0 (RELEASING.md).
+- **Presets.** The old per-user folder is **copied** once to the new one and kept, because the aliases and a downgrade still read it. If the copy fails, the old folder is read in place and no half-copied folder is left.
+- **Window preferences.** The old QSettings are copied into empty new ones at GUI start.
+- **Caches stay valid.** The cache keys contain no package name, path or app version (fingerprints, settings, library versions, `processing_version`), and the cache holds JSON and pickle-free arrays. A test pins the features, ownership and asr keys of a synthetic session, computed before the rename.
+- **Data files.** Session, rig, manifest and settings files contain no package name; output file names do not change.
+- **Updating during a recording.** A recorder process started before an update keeps running from already imported modules: it loads the session and recovery modules at start. INSTALL.md says not to update during a recording.
+- **Not renamed.**
+  - The owner's local checkout folder: the Claude Code project memory is tied to that path.
+  - The history in this log: older entries keep the old name.

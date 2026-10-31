@@ -1,12 +1,12 @@
-# Installing SessionScribe
+# Installing Local TTRPG Recorder
 
-SessionScribe runs from a clone of the repository with [uv](https://docs.astral.sh/uv/),
+Local TTRPG Recorder runs from a clone of the repository with [uv](https://docs.astral.sh/uv/),
 which installs the exact package versions in `uv.lock`. The same steps run on clean
 Windows and Ubuntu machines in CI (`.github/workflows/install.yml`). See
 [SUPPORTED.md](SUPPORTED.md) for what has been tested.
 
 Run the commands in a terminal: on Windows in **PowerShell** or **Windows Terminal**, on
-Linux in any shell. Every `uv run …` command runs from the cloned `sessionscribe` folder
+Linux in any shell. Every `uv run …` command runs from the cloned `local-ttrpg-recorder` folder
 (the one with `pyproject.toml`), so `cd` into it first.
 
 ## 1. Prerequisites
@@ -37,8 +37,8 @@ and the [CUDA Toolkit release notes](https://docs.nvidia.com/cuda/cuda-toolkit-r
 ## 2. Install
 
 ```bash
-git clone https://github.com/htdlord/sessionscribe.git
-cd sessionscribe
+git clone https://github.com/htdlord/local-ttrpg-recorder.git
+cd local-ttrpg-recorder
 # only after v0.1.0 is released (the tag does not exist yet); without it you get
 # the latest development state on main:
 git checkout v0.1.0
@@ -53,7 +53,7 @@ The environment takes about 3 GB of disk with both extras (the NVIDIA libraries 
 ## 3. Check the installation
 
 ```bash
-uv run sessionscribe doctor
+uv run ttrpg doctor
 ```
 
 `doctor` prints one line per check:
@@ -69,9 +69,9 @@ uv run sessionscribe doctor
 Any `FAIL` line says what is missing. Then try it without recording anything:
 
 ```bash
-uv run sessionscribe demo                 # a 2-minute, 4-player demo session (see DEMO.md)
-uv run sessionscribe transcribe --session demo
-uv run sessionscribe-gui                  # desktop app
+uv run ttrpg demo                 # a 2-minute, 4-player demo session (see DEMO.md)
+uv run ttrpg transcribe --session demo
+uv run ttrpg-gui                  # desktop app
 ```
 
 The first real transcription downloads the Whisper model (`large-v3`, about 3 GB) into the
@@ -81,13 +81,13 @@ nothing goes over the network any more.
 ## 4. Audio interfaces
 
 **Windows.** Prefer the interface's **ASIO** driver (`--host-api asio`): all channels in
-one stream with low latency. SessionScribe enables ASIO in the `sounddevice` package from
+one stream with low latency. Local TTRPG Recorder enables ASIO in the `sounddevice` package from
 PyPI; do not put a custom `portaudio.dll` on `PATH`. Only one program can use an ASIO
 driver at a time, so close the DAW or the vendor's control software. **WASAPI**
 (`--host-api wasapi`) is the fallback; many interfaces offer a multi-channel WASAPI
 endpoint (e.g. `IN 01-08` on the Behringer UMC1820).
 
-**Linux.** ALSA, PulseAudio and PipeWire devices are listed by `sessionscribe record
+**Linux.** ALSA, PulseAudio and PipeWire devices are listed by `ttrpg record
 devices`. Your user needs access to the audio devices (on most distributions: the `audio`
 group or a desktop session). Multi-channel interfaces work best through ALSA directly or
 PipeWire's pro-audio profile.
@@ -101,8 +101,26 @@ git pull                     # or: git fetch --tags && git checkout v0.x.y
 uv sync --locked --extra gui --extra cuda
 ```
 
+**Do not update while a recording is running**: stop it first (the recorder process uses
+the installed package).
+
 Settings files and sessions keep working: they carry a schema version and are migrated
 when read.
+
+**Coming from SessionScribe** (the project's name until 2026-10-31): GitHub redirects the
+old repository URL, but point your clone at the new one, then sync:
+
+```bash
+git remote set-url origin https://github.com/htdlord/local-ttrpg-recorder.git
+git pull
+uv sync --locked --extra gui --extra cuda
+```
+
+The commands are now `ttrpg` and `ttrpg-gui`; `sessionscribe` and `sessionscribe-gui`
+still work with a warning until after v0.1.0. On first start your presets
+(`%APPDATA%\sessionscribe` or `~/.config/sessionscribe`) are copied to the new
+`local-ttrpg-recorder` folder and the desktop app's preferences (theme, language, recent
+sessions) are carried over; existing sessions and their caches stay valid.
 
 ## 6. Uninstall
 

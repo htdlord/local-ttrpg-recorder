@@ -19,9 +19,9 @@ and 3.12; GUI tests run offscreen (`QT_QPA_PLATFORM=offscreen`).
 ## Hardware checks
 
 ```bash
-uv run sessionscribe doctor                                   # versions, CUDA, real inference, audio
-uv run sessionscribe doctor --host-api asio --channels 1-8    # also opens an 8-channel ASIO stream
-uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
+uv run ttrpg doctor                                   # versions, CUDA, real inference, audio
+uv run ttrpg doctor --host-api asio --channels 1-8    # also opens an 8-channel ASIO stream
+uv run ttrpg record-probe --host-api asio --channels 1-8 --minutes 30
 ```
 
 `record-probe` writes one 24-bit FLAC per channel to `work/probe/<timestamp>/` (use
@@ -34,12 +34,12 @@ Benchmarks run against local reference clips, which are personal data and git-ig
 (`bench/refs/`). [REFERENCE_GUIDE.md](REFERENCE_GUIDE.md) describes how to prepare one.
 
 ```bash
-uv run sessionscribe bench run --refs bench/refs --matrix m1   # writes work/bench/<run>/results.md
-uv run sessionscribe bench score work/bench/<run>              # re-score without ASR
-uv run sessionscribe bench clip cut bench/refs/clip02 --session recordings/2026-11-05 --start 1:20:00
-uv run sessionscribe bench ref triage bench/refs/clip01        # label segments by ear (M3)
-uv run sessionscribe bench triage score bench/refs/clip01 out.json
-uv run sessionscribe bench bleed bench/refs/clip01             # off vs post/pre on the triage
+uv run ttrpg bench run --refs bench/refs --matrix m1   # writes work/bench/<run>/results.md
+uv run ttrpg bench score work/bench/<run>              # re-score without ASR
+uv run ttrpg bench clip cut bench/refs/clip02 --session recordings/2026-11-05 --start 1:20:00
+uv run ttrpg bench ref triage bench/refs/clip01        # label segments by ear (M3)
+uv run ttrpg bench triage score bench/refs/clip01 out.json
+uv run ttrpg bench bleed bench/refs/clip01             # off vs post/pre on the triage
 ```
 
 ## Release checks
@@ -58,9 +58,9 @@ on clean Windows and Ubuntu runners. [RELEASING.md](RELEASING.md) lists the rele
 GUI strings go through `tr()`. After changing them:
 
 ```bash
-uv run pyside6-lupdate <gui .py files> -ts src/sessionscribe/gui/i18n/sessionscribe_hu.ts
+uv run pyside6-lupdate <gui .py files> -ts src/ttrpg_recorder/gui/i18n/ttrpg_recorder_hu.ts
 # translate the new entries (Qt Linguist or by hand), then
-uv run pyside6-lrelease src/sessionscribe/gui/i18n/sessionscribe_hu.ts -qm src/sessionscribe/gui/i18n/sessionscribe_hu.qm
+uv run pyside6-lrelease src/ttrpg_recorder/gui/i18n/ttrpg_recorder_hu.ts -qm src/ttrpg_recorder/gui/i18n/ttrpg_recorder_hu.qm
 ```
 
 A test checks that every message has a finished Hungarian translation. Settings tooltips

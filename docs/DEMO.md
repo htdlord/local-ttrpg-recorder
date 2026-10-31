@@ -1,8 +1,8 @@
 # Try it without recording: the demo session
 
 ```bash
-uv run sessionscribe demo                 # builds ./demo (downloads ~6 MB once)
-uv run sessionscribe transcribe --session demo
+uv run ttrpg demo                 # builds ./demo (downloads ~6 MB once)
+uv run ttrpg transcribe --session demo
 ```
 
 or in the desktop app: *File → Open session…* → `demo/session.toml`, then **Run** and
@@ -13,7 +13,7 @@ or in the desktop app: *File → Open session…* → `demo/session.toml`, then 
 Four fictional players – *Game Master*, *Bodor*, *Kira* and *Lin* – talk for about two
 minutes, one lavalier track each (`demo/tracks/ch01_gm.flac` …). Their voices are short
 excerpts of four LibriVox volunteers reading public-domain stories, so the "conversation"
-is a patchwork of sentences, but the audio situation is the one SessionScribe is built for:
+is a patchwork of sentences, but the audio situation is the one Local TTRPG Recorder is built for:
 
 - **Bleed:** every track also carries the other voices, quieter and duller, as a lavalier
   picks up the people next to it.
@@ -26,7 +26,7 @@ is a patchwork of sentences, but the audio situation is the one SessionScribe is
 
 ## What to look at
 
-- The transcript (`demo/output/SessionScribe demo.txt`) has one speaker per line, with
+- The transcript (`demo/output/Local TTRPG Recorder demo.txt`) has one speaker per line, with
   bleed copies removed. The JSON's `suppressed` list says which ones and why.
 - In the **Result** tab, filter for flagged items: possible duplicates, low ownership,
   possible missed speech and Whisper's typical "Thank you." on near-silence are kept and

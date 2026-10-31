@@ -9,6 +9,14 @@ migrated when read).
 First release, once the defaults are confirmed on a real session (see
 [docs/RELEASING.md](docs/RELEASING.md)).
 
+### Renamed
+- The project is now **Local TTRPG Recorder** (was SessionScribe): repository
+  `local-ttrpg-recorder`, package `ttrpg_recorder`, commands `ttrpg` and `ttrpg-gui`.
+- `sessionscribe` and `sessionscribe-gui` remain as deprecated aliases with a warning;
+  they are removed in the first release after 0.1.0.
+- Presets and desktop-app preferences are carried over from the old name; sessions and
+  caches stay valid.
+
 ### Transcription
 - Per-track transcription with faster-whisper: `quality` mode (default,
   `WhisperModel.transcribe()` with temperature fallback) and `fast` mode (batched
@@ -41,7 +49,7 @@ First release, once the defaults are confirmed on a real session (see
 ### Tools and documentation
 - `doctor` (versions, CUDA libraries, a real inference, audio devices), `record-probe`,
   `bench` (reference clips, triage labelling, metrics, matrices), `bench clip cut`.
-- `sessionscribe demo`: a demo session from public-domain LibriVox voices.
+- `ttrpg demo`: a demo session from public-domain LibriVox voices.
 - Install guide for Windows and Linux, supported configurations, Hungarian session-day
   checklist, third-party notices; fresh-install CI on Windows and Ubuntu; a check that
   the `cuda` extra alone runs CUDA inference without a system CUDA install.

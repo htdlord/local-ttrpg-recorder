@@ -6,15 +6,15 @@ A `recordings/`, a `bench/refs/` és a `rig.toml` git-ignorált, személyes adat
 
 ## 1. M5 nyitott próbák (a játék előtt, külön próbamappába)
 
-- [ ] **Halk csatorna:** az egyik csatorna gainjét erősen tekerd le, majd futtasd: `uv run sessionscribe record check --rig rig.toml`. Erre a csatornára `quiet` riasztásnak kell jönnie. **Utána tekerd vissza a gaint!**
+- [ ] **Halk csatorna:** az egyik csatorna gainjét erősen tekerd le, majd futtasd: `uv run ttrpg record check --rig rig.toml`. Erre a csatornára `quiet` riasztásnak kell jönnie. **Utána tekerd vissza a gaint!**
 - [ ] **Kihúzás:**
-  1. Indítsd el: `uv run sessionscribe record start --rig rig.toml --session recordings/teszt-kihuzas --no-check --seconds 180`.
+  1. Indítsd el: `uv run ttrpg record start --rig rig.toml --session recordings/teszt-kihuzas --no-check --seconds 180`.
   2. Közben húzd ki a UMC1820 USB-kábelét kb. 10 s-ra, majd dugd vissza.
   3. Elvárt: `device_lost` riasztás, utána `reconnected`, és a felvétel folytatódik.
-  4. Végül `uv run sessionscribe record verify --session recordings/teszt-kihuzas`: egy `device_lost` kimaradás, egyéb hiba nélkül.
+  4. Végül `uv run ttrpg record verify --session recordings/teszt-kihuzas`: egy `device_lost` kimaradás, egyéb hiba nélkül.
 - [ ] **WASAPI `audio_hw`:** a `record devices` WASAPI-sorából vedd az eszköznevet, majd PowerShellben:
   ```powershell
-  $env:SESSIONSCRIBE_TEST_DEVICE = "<WASAPI-eszköznév>"; $env:SESSIONSCRIBE_TEST_HOST_API = "wasapi"
+  $env:TTRPG_RECORDER_TEST_DEVICE = "<WASAPI-eszköznév>"; $env:TTRPG_RECORDER_TEST_HOST_API = "wasapi"
   uv run pytest -m audio_hw
   ```
 
@@ -29,15 +29,15 @@ A `recordings/`, a `bench/refs/` és a `rig.toml` git-ignorált, személyes adat
 - [ ] **Részlet kiválasztása:** legalább **5 perces**, élénk beszélgetés: többen beszélnek egymás után, van egymásra beszélés, és megszólal halkabb beszélő is. Az időpontot az átirat időbélyegeiből veheted.
 - [ ] **Kivágás:** minden sávot egyszerre vág ki, a session időtengelyén igazítva; az eredeti fájlokhoz nem nyúl:
   ```bash
-  uv run sessionscribe bench clip cut bench/refs/clip02 --session recordings/2026-11-05 --start 1:23:00 --minutes 5 --language hu
+  uv run ttrpg bench clip cut bench/refs/clip02 --session recordings/2026-11-05 --start 1:23:00 --minutes 5 --language hu
   ```
 - [ ] **Triage-címkézés** a clip01-hez hasonlóan (útmutató: [REFERENCE_GUIDE.md](../REFERENCE_GUIDE.md), kb. 15–20 perc):
   ```bash
-  uv run sessionscribe bench ref triage bench/refs/clip02
-  uv run sessionscribe bench ref triage bench/refs/clip02 --stats
+  uv run ttrpg bench ref triage bench/refs/clip02
+  uv run ttrpg bench ref triage bench/refs/clip02 --stats
   ```
 - [ ] **Bleed-mérés:** ha a státusz `complete`, futtasd, és küldd el a számokat (szöveget ne):
   ```bash
-  uv run sessionscribe bench bleed bench/refs/clip02
+  uv run ttrpg bench bleed bench/refs/clip02
   ```
   Ebből lesznek véglegesek az M3 ideiglenes tűrései és az átfedés-jelölés, és ebből erősítjük meg az alapértelmezett ASR-módot (M1-benchmark a ≥ 5 perces klipen).
