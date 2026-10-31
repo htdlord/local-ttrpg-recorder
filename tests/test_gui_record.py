@@ -21,11 +21,18 @@ DEVICES = [{"name": "Fake UMC", "host_api": "ASIO", "channels": 8, "samplerate":
 
 
 @pytest.fixture
-def fake_audio(monkeypatch):
+def fake_audio(tmp_path, monkeypatch):
     monkeypatch.setenv("SESSIONSCRIBE_TEST_OPENER", "tests.fake_stream:child_opener")
     monkeypatch.setenv("SESSIONSCRIBE_TEST_DEVICES", json.dumps(DEVICES))
+    # the fake voices follow the recorder's default mic-check timing (5 s quiet, 5 s turns)
+    monkeypatch.setenv("SESSIONSCRIBE_TEST_TURN_S", "5")
     monkeypatch.setenv("PYTHONPATH", str(ROOT))
     monkeypatch.chdir(ROOT)
+    yield
+    # a failed test must not leave its recorder running into the next tests
+    pid = status(tmp_path / "session").get("pid")
+    if pid and control.pid_alive(int(pid)):
+        kill(int(pid))
 
 
 def window(qtbot, tmp_path, scenario="steady", monkeypatch=None):
@@ -97,10 +104,10 @@ def test_mic_check_prompt_and_results(qtbot, tmp_path, fake_audio, monkeypatch):
     tab = setup_tab(w, tmp_path, check=True)
     tab.start_recording()
     qtbot.waitUntil(lambda: "Mesélő" in tab.prompt.text() and tab.prompt.isVisible(), timeout=30000)
-    qtbot.waitUntil(lambda: tab.check_table.rowCount() == 3, timeout=30000)
+    qtbot.waitUntil(lambda: tab.check_table.rowCount() == 3, timeout=60000)
     assert tab.check_table.item(1, 0).text() == "Anna"  # names, not ids
     verdicts = [tab.check_table.item(r, 1).text() for r in range(3)]
-    assert verdicts[1] == "Failed"
+    assert verdicts == ["OK", "Failed", "OK"]  # only the dead mic
     # a failed check stops the recording by itself (no force)
     qtbot.waitUntil(lambda: tab.link_state == "ended", timeout=30000)
     texts = [tab.alarm_list.item(i).text() for i in range(tab.alarm_list.count())]
