@@ -265,7 +265,14 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
 - Verify the stream's actual sample format and rate; record them in the manifest (24-bit file ≠ guaranteed 24-bit end-to-end).
 - Before recording, check free space for the planned duration (default 8 h) + 10 % reserve; warn during recording when remaining time drops below 30 min.
 
-### 8.3 Host APIs
+### 8.3 Recording from the GUI
+
+- The GUI never records in its own process. It starts a **detached recorder process** (`python -m sessionscribe.core.audio.record_child`; Windows: new process group, no console, breaking away from a launcher's job; Linux: new session) that records exactly like `record start`.
+- **No pipes.** The two sides share only files in `<session>/rec/control/`: `status.json` (atomic, ~4 Hz: state, heartbeat, clock, levels, buffer, disk, gaps, current mic-check prompt, command ack), `events.jsonl` (append-only alarms, prompts, mic-check result, end; rotated above 1 MB), `command.json` (GUI → recorder: `stop`), `recorder.lock` (pid, start, session) and `child.log`. The recorder never waits for a reader.
+- Closing or crashing the GUI does not stop the recording; the next window reconnects (last followed session in the preferences, `recorder.lock` + heartbeat). A lock whose process is gone means a crash: the GUI offers Recover (`record recover` + `verify`).
+- The GUI lists devices through a short-lived recorder process, so it never loads PortAudio/ASIO itself (an ASIO driver serves one client).
+
+### 8.4 Host APIs
 
 - Windows: if ASIO is requested, set `SD_ENABLE_ASIO` **before importing sounddevice** (decided in a startup config step). WASAPI is the fallback, but its multichannel behaviour is tested, not assumed.
 - Linux: ALSA, PulseAudio/PipeWire, JACK – whatever PortAudio exposes.
@@ -273,7 +280,7 @@ File fingerprint: size + hash of the first and last MB of each file a range touc
 
 ## 9. GUI (PySide6)
 
-Tabs: **Session**, **Record**, **Settings** (Basic / Advanced, mode-aware disabling), **Run** (progress, ETA, log, cancel/resume), **Result**.
+Tabs: **Session**, **Record** (device, rig, guided mic check with prompts and per-channel result, level meters, alarms with advice, start/stop, recover; §8.3), **Settings** (Basic / Advanced, mode-aware disabling; advanced settings show a translated name with the TOML key underneath), **Run** (progress, ETA, log, cancel/resume), **Result**.
 
 Result view: colour-coded transcript; filter for flagged / overlap / suppressed items; clicking a line plays that time range from the original track (QtMultimedia); recording gaps shown inline. No text editing in v1.
 

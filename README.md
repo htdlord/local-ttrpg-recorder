@@ -111,6 +111,8 @@ uv run sessionscribe-gui
 ```
 
 Tabs: **Session** (create from a folder or open `session.toml`, edit participants),
+**Record** (device and rig, guided mic check, meters, alarms; the recording runs in a
+separate process, so closing the window does not stop it and reopening reconnects),
 **Settings** (preset, basic settings, generated advanced form; settings with no effect in
 the chosen ASR mode are disabled), **Run** (progress, ETA, cancel; running again resumes
 from the cache; export only), **Result** (filters, playback from the original track,
