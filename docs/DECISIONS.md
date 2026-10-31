@@ -571,6 +571,19 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 - [ ] Mic check at the start of a real session, with every participant speaking (`record start --rig rig.toml`).
 - [ ] Record a full session with the recorder, then `record verify`.
 - [ ] Physical unplug: pull the UMC1820 during `record start`, plug it back in, and check that recording continues with a `device_lost` gap.
-- [ ] Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.
+- [x] ~~Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.~~ Done on 2026-10-31 (reference machine, ASIO): `record start` stopped at 480.0 min with 672 segment files, 0 gaps, 0 dropped frames, 0 input overflows, max buffer 1 %; `record verify`: 0 problems, every channel 1 382 377 440 samples (7 h 59 min 59.5 s). This meets the M5 acceptance criterion "8 h, 8-ch recording without loss" for the wired channels.
 - [x] ~~`pytest -m audio_hw` on ASIO~~: done on 2026-10-30 (2 min recording + verify, device refresh). WASAPI is still open; run it alongside one of the tasks above.
 - [ ] `record check` with one channel deliberately turned down: the `quiet` alarm fires.
+
+## 2026-10-30 – M4 GUI (processing side)
+
+Owner decisions: PySide6 is an optional extra (`gui`), `pytest-qt` a dev dependency; the Record tab comes in a second PR with a detached recorder process that communicates only through files in the session folder (no stdout/stdin pipe), so a GUI crash cannot stop a recording. Visual quality: one accent colour, an 8 px spacing grid, icons for tabs and flags, a readable transcript font, light and dark themes reviewed from screenshots.
+
+- **View models without Qt.** The logic behind the widgets (settings form generated from the pydantic model with mode notes, participant table validation, result rows and filters, ETA, theme tokens and speaker colours, playback passages) lives in `gui/models/` and is tested without Qt. Widgets are thin; `core` still has no Qt import.
+- **Themes from tokens.** `gui/models/colors.py` holds the light and dark tokens (accent teal `#0f7c8c` / `#3fb5c4`) and eight colour-blind friendly speaker colours per theme; a test keeps text and speaker colours at WCAG ≥ 4.5:1 on the surface. Fusion style + palette + one QSS built from the tokens; icons are small inline SVGs tinted with the theme colour (no icon library).
+- **Workers.** Processing and `doctor` run in `QThread` workers; ASR keeps its worker process as in the CLI. Cancel uses the existing `cancel` callback.
+- **Cancel between chunks (fix).** The pipeline only checked `cancel` inside the engine; with fast engines a cancel could be missed until the end. It now also checks between chunks. Completed chunks stay cached and a new run resumes.
+- **Playback with `QAudioSink`** (int16 mono PCM from the virtual track, ±0.3 s context), never through the recording device/ASIO. The sink is injectable so tests need no sound card.
+- **Manual reassignment** is stored as `[[reassignments]]` (segment id → participant) in `session.toml`: no transcript text in the session file, portable, survives re-export. Applied in `core.merge.apply_reassignments` after bleed handling; the segment gains `reassigned` and `reassigned_from`, other flags stay. Unknown ids warn. CLI: `reassign`. Restoring a suppressed item (bleed/duplicate) is a later feature.
+- **i18n.** English source strings, `sessionscribe_hu.ts` + compiled `.qm` committed (both small) and shipped in the wheel; a test checks every `tr()` string has a finished translation with the same placeholders.
+- **`.gitignore`:** `models/` became `/models/`; the old pattern also hid `src/sessionscribe/gui/models/` (and ruff skips ignored files).

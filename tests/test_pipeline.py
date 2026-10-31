@@ -176,3 +176,19 @@ def test_fast_preset_oom_fallback_in_pipeline(tmp_path, monkeypatch):
     asr_events = [e for e in result.processing_events if e.get("stage") == "asr"]
     assert [e["kind"] for e in asr_events] == ["warning", "warning"]
     assert result.batch_sizes == [1]
+
+
+def test_cancel_between_chunks_keeps_completed_ones(tmp_path):
+    from sessionscribe.core.pipeline.asr import Cancelled
+
+    session = make_session(tmp_path / "s", n=2)
+    calls = {"n": 0}
+
+    def cancel():
+        calls["n"] += 1
+        return calls["n"] > 3  # after a few chunks
+
+    with pytest.raises(Cancelled):
+        run(session, settings(), cancel=cancel)
+    _, stats = run(session, settings())
+    assert 0 < stats.cached < stats.chunks  # resumed: the finished chunks came from the cache

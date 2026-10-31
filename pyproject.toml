@@ -35,9 +35,12 @@ cuda = [
     "nvidia-cublas-cu12>=12.4,<13",
     "nvidia-cudnn-cu12>=9,<10",
 ]
+# Desktop GUI (LGPLv3, linked dynamically); the CLI and core install without it.
+gui = ["PySide6>=6.7"]
 
 [project.scripts]
 sessionscribe = "sessionscribe.cli:app"
+sessionscribe-gui = "sessionscribe.gui.app:main"
 
 [dependency-groups]
 dev = [
@@ -45,6 +48,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4.0",
     "pytest>=8.3",
+    "pytest-qt>=4.4",
     "ruff>=0.8",
 ]
 
@@ -62,6 +66,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
+qt_api = "pyside6"
 filterwarnings = [
     # sounddevice 0.5.6 sets ndarray.shape (deprecated in numpy 2.5); upstream issue.
     "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:sounddevice",

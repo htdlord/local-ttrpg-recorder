@@ -54,7 +54,8 @@ cache/
 .cache/
 *_cache/
 output/
-models/
+# model downloads at the repo root (not the src/.../gui/models package)
+/models/
 recordings/
 
 # Model download caches (faster-whisper / Hugging Face)

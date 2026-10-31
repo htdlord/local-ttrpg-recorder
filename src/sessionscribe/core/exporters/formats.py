@@ -146,6 +146,8 @@ def _segment_json(s: TranscriptSegment) -> dict[str, Any]:
             for w in s.words
         ],
     }
+    if s.reassigned_from:
+        out["reassigned_from"] = s.reassigned_from
     if s.probable_speaker:
         out["probable_speaker"] = s.probable_speaker
     if s.suppression_reason:

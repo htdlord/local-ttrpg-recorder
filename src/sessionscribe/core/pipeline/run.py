@@ -25,10 +25,16 @@ from sessionscribe.core.events import (
     null_sink,
 )
 from sessionscribe.core.exporters.single import _library_versions
-from sessionscribe.core.merge import RecordingGap, TrackInput, merge_tracks
+from sessionscribe.core.merge import (
+    RecordingGap,
+    TrackInput,
+    apply_reassignments,
+    merge_tracks,
+)
 from sessionscribe.core.pipeline import PROCESSING_VERSION
 from sessionscribe.core.pipeline.asr import (
     AsrError,
+    Cancelled,
     Segment,
     SpeechInterval,
     resolve_model_path,
@@ -245,6 +251,8 @@ def _run_session(
     )
     try:
         for ti, ci in todo:
+            if cancel is not None and cancel():  # between chunks, whatever the engine does
+                raise Cancelled("transcription cancelled")
             p, chunk = planned[ti], planned[ti].chunks[ci]
             base = done
 
@@ -360,6 +368,16 @@ def _run_session(
         silent_mics = list(ownership.silent)
         stats.bleed_suppressed = sum(s.suppression_reason == "bleed" for s in transcript.suppressed)
         stats.duplicates = sum(s.suppression_reason == "duplicate" for s in transcript.suppressed)
+    if session.config.reassignments:
+        transcript, unknown = apply_reassignments(
+            transcript,
+            {r.segment: r.to for r in session.config.reassignments},
+            [p.id for p in session.participants],
+        )
+        for sid in unknown:
+            recording_sink(
+                WarningEvent("reassign", f"reassigned segment {sid} is not in the output")
+            )
     for seg in transcript.segments:
         sink(SegmentEvent(seg.speaker, seg))
     duration = max((p.participant.offset_samples + p.length for p in planned), default=0)
