@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -162,6 +163,9 @@ class EventLog:
         self.max_bytes = max_bytes
         folder.mkdir(parents=True, exist_ok=True)
         self.seq = self._last_seq()
+        # alarms (writer thread), prompts (mic-check thread) and the main thread append;
+        # appends from two handles are not atomic on Windows
+        self._lock = threading.Lock()
 
     def _last_seq(self) -> int:
         last = 0
@@ -171,17 +175,18 @@ class EventLog:
         return last
 
     def append(self, event_type: str, /, **fields: Any) -> int:
-        self.seq += 1
-        line = json.dumps({"seq": self.seq, "type": event_type, "wall": time.time(), **fields})
-        path = self.folder / EVENTS_FILE
-        try:
-            if path.stat().st_size + len(line) > self.max_bytes:
-                _replace(str(path), self.folder / EVENTS_OLD)
-        except FileNotFoundError:
-            pass
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-        return self.seq
+        with self._lock:
+            self.seq += 1
+            line = json.dumps({"seq": self.seq, "type": event_type, "wall": time.time(), **fields})
+            path = self.folder / EVENTS_FILE
+            try:
+                if path.stat().st_size + len(line) > self.max_bytes:
+                    _replace(str(path), self.folder / EVENTS_OLD)
+            except FileNotFoundError:
+                pass
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+            return self.seq
 
 
 def _read_lines(path: Path) -> list[dict[str, Any]]:
@@ -262,7 +267,37 @@ def probe(session_dir: Path, now: float | None = None) -> Link:
     return Link("none", status, None)
 
 
+def mark_recovered(session_dir: Path) -> None:
+    """After ``record recover``: drop a dead recorder's lock and close its status, so the
+    session reads as ended instead of crashed."""
+    folder = control_dir(session_dir)
+    lock = read_lock(folder)
+    if lock is not None and not pid_alive(int(lock.get("pid", 0))):
+        (folder / LOCK_FILE).unlink(missing_ok=True)
+    status = read_status(folder) or {}
+    if status.get("state") not in FINAL_STATES:
+        write_status(folder, {**status, "state": "failed", "error": "recovered after a crash"})
+
+
 # --- starting the recorder ---------------------------------------------------------------
+
+
+def query_devices(timeout_s: float = 30.0) -> list[dict[str, Any]]:
+    """Input devices as listed by a short-lived recorder process (name, host_api,
+    channels, samplerate); raises RuntimeError with its output when it fails."""
+    import subprocess
+
+    done = subprocess.run(
+        [sys.executable, "-m", "sessionscribe.core.audio.record_child", "--list-devices"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=timeout_s,
+        stdin=subprocess.DEVNULL,
+    )
+    if done.returncode != 0:
+        raise RuntimeError((done.stderr or done.stdout).strip()[-500:] or "device query failed")
+    return list(json.loads(done.stdout.strip().splitlines()[-1]))
 
 
 def spawn_recorder(

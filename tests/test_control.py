@@ -89,3 +89,19 @@ def test_probe_states(tmp_path):
     assert control.probe(tmp_path).state == "crashed"  # status never reached a final state
     control.write_status(folder, {"pid": dead, "state": "stopped", "heartbeat": now})
     assert control.probe(tmp_path).state == "ended"
+
+
+def test_appends_from_several_threads_keep_every_line(tmp_path):
+    import threading
+
+    log = control.EventLog(tmp_path)
+    threads = [
+        threading.Thread(target=lambda k=k: [log.append("t", k=k, i=i) for i in range(200)])
+        for k in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    events = control.EventReader(tmp_path).poll()
+    assert len(events) == 800 and [e["seq"] for e in events] == list(range(1, 801))
