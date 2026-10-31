@@ -41,6 +41,9 @@ gui = ["PySide6>=6.7"]
 [project.scripts]
 ttrpg = "ttrpg_recorder.cli:app"
 ttrpg-gui = "ttrpg_recorder.gui.app:main"
+# Deprecated names from before the rename; removed in the first release after v0.1.0.
+sessionscribe = "ttrpg_recorder.compat:old_cli"
+sessionscribe-gui = "ttrpg_recorder.compat:old_gui"
 
 [dependency-groups]
 dev = [

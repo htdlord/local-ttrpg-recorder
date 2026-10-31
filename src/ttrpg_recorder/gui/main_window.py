@@ -234,6 +234,15 @@ class MainWindow(QMainWindow):
         about = help_menu.addAction(self.tr("About SessionScribe…"))
         about.triggered.connect(self.about)
 
+    def show_deprecated_alias(self, old: str) -> None:
+        from ttrpg_recorder.compat import ALIASES, REMOVED_AFTER
+
+        self.statusBar().showMessage(
+            self.tr("'{0}' is deprecated and will be removed after {1}; start it as '{2}'.").format(
+                old, REMOVED_AFTER, ALIASES[old]
+            )
+        )
+
     def about(self) -> AboutDialog:
         dialog = AboutDialog(self, self.tokens)
         dialog.open()
