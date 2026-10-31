@@ -74,7 +74,14 @@ def verify(session_dir: Path) -> VerifyReport:
         path = session.folder / seg.file
         known.add(path.resolve())
         if not path.is_file():
-            report.segments.append(SegmentCheck(seg.file, seg.status, False, "missing"))
+            partial = path.with_name(path.name + PARTIAL_SUFFIX)
+            problem = (
+                "no readable audio (killed right after it was opened); original kept as "
+                f"{partial.name}"
+                if seg.status == "damaged" and partial.is_file()
+                else "missing"
+            )
+            report.segments.append(SegmentCheck(seg.file, seg.status, False, problem))
             continue
         if seg.status == "open":
             report.segments.append(
