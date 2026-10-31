@@ -571,7 +571,7 @@ More aggressive settings (margin 9) cut more but lose speech. Following "losing 
 - [ ] Mic check at the start of a real session, with every participant speaking (`record start --rig rig.toml`).
 - [ ] Record a full session with the recorder, then `record verify`.
 - [ ] Physical unplug: pull the UMC1820 during `record start`, plug it back in, and check that recording continues with a `device_lost` gap.
-- [ ] Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.
+- [x] ~~Long overnight test recording (8 h, wired channels) plus `record verify`, run by the owner.~~ Done on 2026-10-31 (reference machine, ASIO): `record start` stopped at 480.0 min with 672 segment files, 0 gaps, 0 dropped frames, 0 input overflows, max buffer 1 %; `record verify`: 0 problems, every channel 1 382 377 440 samples (7 h 59 min 59.5 s). This meets the M5 acceptance criterion "8 h, 8-ch recording without loss" for the wired channels.
 - [x] ~~`pytest -m audio_hw` on ASIO~~: done on 2026-10-30 (2 min recording + verify, device refresh). WASAPI is still open; run it alongside one of the tasks above.
 - [ ] `record check` with one channel deliberately turned down: the `quiet` alarm fires.
 
