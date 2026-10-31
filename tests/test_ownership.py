@@ -1,17 +1,17 @@
 import numpy as np
 import soundfile as sf
 
-from sessionscribe.core.cache import Cache
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.pipeline.coupling import estimate_coupling
-from sessionscribe.core.pipeline.ownership import (
+from tests import synth_bleed as sb
+from ttrpg_recorder.core.cache import Cache
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.pipeline.coupling import estimate_coupling
+from ttrpg_recorder.core.pipeline.ownership import (
     compute_ownership,
     hold_forward,
     ownership_masks,
     track_floors,
 )
-from sessionscribe.core.session import Participant, Session, SessionConfig, write_session
-from tests import synth_bleed as sb
+from ttrpg_recorder.core.session import Participant, Session, SessionConfig, write_session
 
 FPS = sb.FPS
 
@@ -120,7 +120,7 @@ def test_manual_and_guided_warnings(tmp_path):
 
 
 def test_pre_gains_attenuate_and_release():
-    from sessionscribe.core.pipeline.ownership import apply_gains, pre_gains
+    from ttrpg_recorder.core.pipeline.ownership import apply_gains, pre_gains
 
     owned = np.array([True, True, False, False, False, False])
     g = pre_gains(owned, 15.0, mute=False, release_frames=2)
@@ -136,7 +136,7 @@ def test_pre_gains_attenuate_and_release():
 
 
 def test_silent_mic_detection():
-    from sessionscribe.core.pipeline.ownership import silent_mics
+    from ttrpg_recorder.core.pipeline.ownership import silent_mics
 
     lv = sb.levels(
         [[(0, 30)], [(30, 50)], []], sb.acoustic(3, -40.0), [0, 0, 0], [-75, -75, -45], 60

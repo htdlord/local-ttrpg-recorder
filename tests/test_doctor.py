@@ -1,4 +1,4 @@
-from sessionscribe.core.doctor import CheckResult, DoctorReport, Status, check_platform
+from ttrpg_recorder.core.doctor import CheckResult, DoctorReport, Status, check_platform
 
 
 def test_worst_status_and_ok():

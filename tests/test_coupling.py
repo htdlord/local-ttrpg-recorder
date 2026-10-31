@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from sessionscribe.core.pipeline.coupling import (
+from tests import synth_bleed as sb
+from ttrpg_recorder.core.pipeline.coupling import (
     align,
     apply_guided,
     estimate_coupling,
@@ -9,7 +10,6 @@ from sessionscribe.core.pipeline.coupling import (
     noise_level,
     speech_level,
 )
-from tests import synth_bleed as sb
 
 SPEAKERS = ["gm", "anna", "bela"]
 GAINS = [0.0, -15.0, -20.0]  # mic gains differ like on the real interface

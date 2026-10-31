@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from sessionscribe.core.audio.recovery import PARTIAL_SUFFIX, recover, verify
-from sessionscribe.core.audio.track import VirtualTrack
-from sessionscribe.core.session import Session, write_session
 from tests.fake_stream import FakeOpener, Scenario
 from tests.test_recorder import config, record
+from ttrpg_recorder.core.audio.recovery import PARTIAL_SUFFIX, recover, verify
+from ttrpg_recorder.core.audio.track import VirtualTrack
+from ttrpg_recorder.core.session import Session, write_session
 
 ROOT = Path(__file__).resolve().parents[1]
 

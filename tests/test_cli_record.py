@@ -5,11 +5,11 @@ import time
 import pytest
 from typer.testing import CliRunner
 
-from sessionscribe import cli_record
-from sessionscribe.cli import app
-from sessionscribe.core.audio.manifest import read_rig
-from sessionscribe.core.session import Session
 from tests.fake_stream import FakeOpener, Scenario
+from ttrpg_recorder import cli_record
+from ttrpg_recorder.cli import app
+from ttrpg_recorder.core.audio.manifest import read_rig
+from ttrpg_recorder.core.session import Session
 
 runner = CliRunner()
 
@@ -134,7 +134,7 @@ def test_start_with_mic_check_saves_ranges(tmp_path, fake_device):
 
 
 def test_open_failure_is_a_clear_error_not_a_hang(tmp_path, monkeypatch):
-    from sessionscribe.core.audio.backend import AudioSetupError
+    from ttrpg_recorder.core.audio.backend import AudioSetupError
 
     class Broken(FakeOpener):
         def open(self, callback):
@@ -156,7 +156,7 @@ def test_open_failure_is_a_clear_error_not_a_hang(tmp_path, monkeypatch):
 def test_level_line_fits_the_terminal(monkeypatch):
     import os
 
-    from sessionscribe.core.audio.recorder import LevelEvent
+    from ttrpg_recorder.core.audio.recorder import LevelEvent
 
     monkeypatch.setattr(
         cli_record.shutil, "get_terminal_size", lambda d: os.terminal_size((80, 24))

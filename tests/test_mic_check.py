@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from sessionscribe.core.audio.mic_check import analyze, overall, plan_turns
-from sessionscribe.core.audio.recorder import LevelEvent
+from ttrpg_recorder.core.audio.mic_check import analyze, overall, plan_turns
+from ttrpg_recorder.core.audio.recorder import LevelEvent
 
 PARTS = ["gm", "anna", "bela"]
 CHANNELS = [1, 2, 3]

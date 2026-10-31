@@ -8,10 +8,10 @@ bump instead.
 import numpy as np
 import soundfile as sf
 
-from sessionscribe.core.config import Settings
-from sessionscribe.core.pipeline import features, ownership, run
-from sessionscribe.core.pipeline.chunks import Chunk
-from sessionscribe.core.session import Session, SessionConfig, write_session
+from ttrpg_recorder.core.config import Settings
+from ttrpg_recorder.core.pipeline import features, ownership, run
+from ttrpg_recorder.core.pipeline.chunks import Chunk
+from ttrpg_recorder.core.session import Session, SessionConfig, write_session
 
 R = 48_000
 EXPECTED = {

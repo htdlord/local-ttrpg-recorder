@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from sessionscribe.core.bench.metrics import (
+from ttrpg_recorder.core.bench.metrics import (
     HypSegment,
     HypWord,
     score_track,
@@ -12,9 +12,9 @@ from sessionscribe.core.bench.metrics import (
     summarize,
     words_of,
 )
-from sessionscribe.core.bench.reference import Reference, Utterance
-from sessionscribe.core.bench.resources import peak_rss_mb
-from sessionscribe.core.bench.runner import (
+from ttrpg_recorder.core.bench.reference import Reference, Utterance
+from ttrpg_recorder.core.bench.resources import peak_rss_mb
+from ttrpg_recorder.core.bench.runner import (
     MATRICES,
     Cell,
     derived,
@@ -146,8 +146,8 @@ def test_partition_tracks_balances_load(tmp_path):
     import numpy as np
     import soundfile as sf
 
-    from sessionscribe.core.bench.clip import Clip, active_seconds, init_clip
-    from sessionscribe.core.bench.runner import ClipRef, partition_tracks
+    from ttrpg_recorder.core.bench.clip import Clip, active_seconds, init_clip
+    from ttrpg_recorder.core.bench.runner import ClipRef, partition_tracks
 
     folder = tmp_path / "c"
     (folder / "tracks").mkdir(parents=True)
@@ -167,7 +167,7 @@ def test_partition_tracks_balances_load(tmp_path):
 
 
 def test_merge_child_infos():
-    from sessionscribe.core.bench.runner import merge_child_infos
+    from ttrpg_recorder.core.bench.runner import merge_child_infos
 
     a = {
         "ok": True,

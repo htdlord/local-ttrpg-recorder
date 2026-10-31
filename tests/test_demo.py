@@ -5,8 +5,8 @@ import itertools
 import numpy as np
 import pytest
 
-from sessionscribe.core import demo
-from sessionscribe.core.session import Session
+from ttrpg_recorder.core import demo
+from ttrpg_recorder.core.session import Session
 
 R = demo.RATE
 

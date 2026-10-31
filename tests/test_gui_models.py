@@ -5,13 +5,13 @@ from dataclasses import replace
 import pytest
 from pydantic import ValidationError
 
-from sessionscribe.core.config import Settings, load_settings
-from sessionscribe.core.merge import RecordingGap, Transcript
-from sessionscribe.core.result import SessionResult
-from sessionscribe.core.session import Participant, SessionConfig
-from sessionscribe.gui.models import colors, participants, results
-from sessionscribe.gui.models import settings_form as sf
 from tests.test_attribution import seg
+from ttrpg_recorder.core.config import Settings, load_settings
+from ttrpg_recorder.core.merge import RecordingGap, Transcript
+from ttrpg_recorder.core.result import SessionResult
+from ttrpg_recorder.core.session import Participant, SessionConfig
+from ttrpg_recorder.gui.models import colors, participants, results
+from ttrpg_recorder.gui.models import settings_form as sf
 
 R = 48_000
 

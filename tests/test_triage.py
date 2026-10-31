@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.bench import triage as t
-from sessionscribe.core.bench.clip import Clip, init_clip
-from sessionscribe.core.merge import TranscriptSegment
-from sessionscribe.core.pipeline.asr import Word
 from tests.fakes import FakeFactory
+from ttrpg_recorder.core.bench import triage as t
+from ttrpg_recorder.core.bench.clip import Clip, init_clip
+from ttrpg_recorder.core.merge import TranscriptSegment
+from ttrpg_recorder.core.pipeline.asr import Word
 
 R = 48_000
 FRAME = 960

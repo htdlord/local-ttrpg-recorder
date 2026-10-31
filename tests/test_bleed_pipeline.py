@@ -3,10 +3,10 @@
 import numpy as np
 import soundfile as sf
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.pipeline.run import process_session
-from sessionscribe.core.session import Participant, Session, SessionConfig, write_session
 from tests.fakes import FakeFactory
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.pipeline.run import process_session
+from ttrpg_recorder.core.session import Participant, Session, SessionConfig, write_session
 
 R = 48_000
 IDENTITY = {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}

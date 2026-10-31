@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sessionscribe.core.audio import backend
-from sessionscribe.core.audio.backend import (
+from ttrpg_recorder.core.audio import backend
+from ttrpg_recorder.core.audio.backend import (
     AudioSetupError,
     ChannelCountError,
     InputDevice,

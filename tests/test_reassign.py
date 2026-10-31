@@ -6,15 +6,15 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from sessionscribe.cli import app
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.exporters.formats import to_json, to_txt
-from sessionscribe.core.merge import REASSIGNED, Transcript, apply_reassignments
-from sessionscribe.core.pipeline.run import export_session, process_session
-from sessionscribe.core.session import Session, SessionConfig, write_session
 from tests.fakes import FakeFactory
 from tests.test_attribution import seg
 from tests.test_pipeline import IDENTITY, make_session
+from ttrpg_recorder.cli import app
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.exporters.formats import to_json, to_txt
+from ttrpg_recorder.core.merge import REASSIGNED, Transcript, apply_reassignments
+from ttrpg_recorder.core.pipeline.run import export_session, process_session
+from ttrpg_recorder.core.session import Session, SessionConfig, write_session
 
 runner = CliRunner()
 

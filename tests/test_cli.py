@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from sessionscribe import __version__
-from sessionscribe.cli import app
+from ttrpg_recorder import __version__
+from ttrpg_recorder.cli import app
 
 runner = CliRunner()
 
@@ -85,7 +85,7 @@ def test_session_init(tmp_path):
     import numpy as np
     import soundfile as sf
 
-    from sessionscribe.core.session import Session
+    from ttrpg_recorder.core.session import Session
 
     tracks = tmp_path / "rec"
     tracks.mkdir()
@@ -104,8 +104,8 @@ def test_session_init(tmp_path):
 
 
 def _fake_pipeline(monkeypatch):
-    from sessionscribe.core.pipeline import run
     from tests.fakes import FakeFactory
+    from ttrpg_recorder.core.pipeline import run
 
     real_process, real_export = run.process_session, run.export_session
 

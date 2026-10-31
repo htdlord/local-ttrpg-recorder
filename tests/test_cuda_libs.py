@@ -1,4 +1,4 @@
-from sessionscribe.core.cuda_libs import (
+from ttrpg_recorder.core.cuda_libs import (
     REQUIRED_FILES,
     check_package,
     library_dir,

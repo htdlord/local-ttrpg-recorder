@@ -2,7 +2,7 @@
 
 Builds a fresh virtual environment from uv.lock in a temporary folder, removes every
 system CUDA/cuDNN location from the environment of the check (PATH entries, CUDA_PATH*,
-CUDNN*, LD_LIBRARY_PATH entries) and runs `sessionscribe doctor --device cuda` there.
+CUDNN*, LD_LIBRARY_PATH entries) and runs `ttrpg doctor --device cuda` there.
 
     uv run python scripts/clean_env_check.py                 # with the cuda extra: must pass
     uv run python scripts/clean_env_check.py --no-cuda-extra # control: what is missing then
@@ -56,7 +56,7 @@ def _run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 
 
 def build_env(folder: Path, cuda_extra: bool, python: str) -> Path:
-    """A venv with exactly the locked runtime packages (+ cuda extra) and sessionscribe."""
+    """A venv with exactly the locked runtime packages (+ cuda extra) and ttrpg_recorder."""
     requirements = folder / "requirements.txt"
     export = ["uv", "export", "--locked", "--no-dev", "--no-hashes", "--no-emit-project"]
     if cuda_extra:
@@ -68,11 +68,11 @@ def build_env(folder: Path, cuda_extra: bool, python: str) -> Path:
     _run(["uv", "pip", "install", *target, "--quiet", "-r", str(requirements)])
     _run(["uv", "pip", "install", *target, "--quiet", "--no-deps", str(ROOT)])
     scripts = venv / ("Scripts" if sys.platform == "win32" else "bin")
-    return scripts / "sessionscribe"
+    return scripts / "ttrpg"
 
 
 def check(cuda_extra: bool = True, python: str = "3.12", keep: bool = False) -> dict[str, Any]:
-    folder = Path(tempfile.mkdtemp(prefix="sessionscribe-clean-"))
+    folder = Path(tempfile.mkdtemp(prefix="ttrpg-recorder-clean-"))
     try:
         exe = build_env(folder, cuda_extra, python)
         env, removed = clean_environment(dict(os.environ))

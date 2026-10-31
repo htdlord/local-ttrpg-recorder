@@ -8,8 +8,8 @@ and ``test_settings.test_mode_table_is_pinned`` together.
 import numpy as np
 import pytest
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.pipeline.asr import transcribe_kwargs, vad_options
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.pipeline.asr import transcribe_kwargs, vad_options
 
 pytestmark = pytest.mark.slow
 
@@ -187,7 +187,7 @@ def test_quality_mode_honours_condition_and_hallucination_options(whisper, monke
 
 def test_real_transcribe_end_to_end(whisper):
     """Engine on a real model: runs, returns integer sample positions."""
-    from sessionscribe.core.pipeline.asr import AsrEngine, LoadedModel
+    from ttrpg_recorder.core.pipeline.asr import AsrEngine, LoadedModel
 
     settings = load_settings(cli={"model": {"id": "tiny"}, "decoding": {"language": "en"}})
     loaded = LoadedModel("tiny", "", None, "cpu", "int8", True, 0.0)

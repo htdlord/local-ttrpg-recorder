@@ -115,9 +115,9 @@ class FakeOpener:
 
 
 def child_opener(setup) -> FakeOpener:
-    """Device for the recorder child process in tests (``SESSIONSCRIBE_TEST_OPENER``).
+    """Device for the recorder child process in tests (``TTRPG_RECORDER_TEST_OPENER``).
 
-    About real time, endless. ``SESSIONSCRIBE_TEST_SCENARIO``:
+    About real time, endless. ``TTRPG_RECORDER_TEST_SCENARIO``:
     - ``steady`` (default): every channel speaks;
     - ``mic_ok``: each channel speaks only in its own mic-check turn (1 s noise, 1 s
       turns, see ``plan_turns``), after that all of them;
@@ -125,12 +125,12 @@ def child_opener(setup) -> FakeOpener:
     """
     import os
 
-    from sessionscribe.core.audio.mic_check import plan_turns
+    from ttrpg_recorder.core.audio.mic_check import plan_turns
 
     n = len(setup.channels)
     rate, blocksize = setup.samplerate, setup.blocksize
-    scenario = os.environ.get("SESSIONSCRIBE_TEST_SCENARIO", "steady")
-    turn_s = float(os.environ.get("SESSIONSCRIBE_TEST_TURN_S", "1"))  # = --noise-s/--turn-s
+    scenario = os.environ.get("TTRPG_RECORDER_TEST_SCENARIO", "steady")
+    turn_s = float(os.environ.get("TTRPG_RECORDER_TEST_TURN_S", "1"))  # = --noise-s/--turn-s
     _, turns = plan_turns(setup.ids, turn_s, turn_s)
     end = turns[-1].end_s + 1.0
 

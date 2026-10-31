@@ -6,13 +6,13 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.events import SegmentEvent, WarningEvent
-from sessionscribe.core.pipeline import asr
-from sessionscribe.core.pipeline.run import MissingResults, export_session, process_session
-from sessionscribe.core.pipeline.worker import WorkerCrashed
-from sessionscribe.core.session import Participant, Session, SessionConfig, write_session
 from tests.fakes import FakeFactory, OomFactory
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.events import SegmentEvent, WarningEvent
+from ttrpg_recorder.core.pipeline import asr
+from ttrpg_recorder.core.pipeline.run import MissingResults, export_session, process_session
+from ttrpg_recorder.core.pipeline.worker import WorkerCrashed
+from ttrpg_recorder.core.session import Participant, Session, SessionConfig, write_session
 
 R = 48_000
 IDENTITY = {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}
@@ -179,7 +179,7 @@ def test_fast_preset_oom_fallback_in_pipeline(tmp_path, monkeypatch):
 
 
 def test_cancel_between_chunks_keeps_completed_ones(tmp_path):
-    from sessionscribe.core.pipeline.asr import Cancelled
+    from ttrpg_recorder.core.pipeline.asr import Cancelled
 
     session = make_session(tmp_path / "s", n=2)
     calls = {"n": 0}

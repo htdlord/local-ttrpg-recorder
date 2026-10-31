@@ -2,18 +2,18 @@
 
 import numpy as np
 
-from sessionscribe.core.config import BleedSettings, DedupSettings
-from sessionscribe.core.merge import Transcript, TranscriptSegment
-from sessionscribe.core.pipeline.asr import Word
-from sessionscribe.core.pipeline.attribution import (
+from ttrpg_recorder.core.config import BleedSettings, DedupSettings
+from ttrpg_recorder.core.merge import Transcript, TranscriptSegment
+from ttrpg_recorder.core.pipeline.asr import Word
+from ttrpg_recorder.core.pipeline.attribution import (
     apply_bleed_handling,
     attribute_bleed,
     dedup,
     mark_overlaps,
 )
-from sessionscribe.core.pipeline.coupling import manual_coupling
-from sessionscribe.core.pipeline.ownership import Ownership
-from sessionscribe.core.quality import LOW_OWNERSHIP, POSSIBLE_DUPLICATE, POSSIBLE_WRONG_SPEAKER
+from ttrpg_recorder.core.pipeline.coupling import manual_coupling
+from ttrpg_recorder.core.pipeline.ownership import Ownership
+from ttrpg_recorder.core.quality import LOW_OWNERSHIP, POSSIBLE_DUPLICATE, POSSIBLE_WRONG_SPEAKER
 
 R = 48_000
 SPK = ["gm", "anna", "bela"]

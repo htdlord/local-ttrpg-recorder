@@ -1,7 +1,7 @@
 import pytest
 
-from sessionscribe.core.bench.triage import TriageFile, TriageUnit
-from sessionscribe.core.bench.triage_metrics import locate, score_triage
+from ttrpg_recorder.core.bench.triage import TriageFile, TriageUnit
+from ttrpg_recorder.core.bench.triage_metrics import locate, score_triage
 
 
 def unit(uid, speaker, a, b, label, source=None):

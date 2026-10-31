@@ -5,10 +5,10 @@ import pytest
 import soundfile as sf
 from pydantic import ValidationError
 
-from sessionscribe.core.audio.reader import AudioReadError
-from sessionscribe.core.audio.track import VirtualTrack, file_fingerprint
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.session import (
+from ttrpg_recorder.core.audio.reader import AudioReadError
+from ttrpg_recorder.core.audio.track import VirtualTrack, file_fingerprint
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.session import (
     Session,
     SessionConfig,
     suggest_session,

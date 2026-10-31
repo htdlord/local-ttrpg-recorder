@@ -2,10 +2,10 @@
 
 import pytest
 
-from sessionscribe.core.audio.backend import AudioSetupError, InputDevice
-from sessionscribe.core.audio.live import Meter, bar, find_device
-from sessionscribe.core.audio.power import ES_CONTINUOUS, ES_SYSTEM_REQUIRED, inhibit_sleep
 from tests.fake_stream import FakeOpener, Scenario
+from ttrpg_recorder.core.audio.backend import AudioSetupError, InputDevice
+from ttrpg_recorder.core.audio.live import Meter, bar, find_device
+from ttrpg_recorder.core.audio.power import ES_CONTINUOUS, ES_SYSTEM_REQUIRED, inhibit_sleep
 
 DEVICES = [
     InputDevice(3, "UMC1820", "Windows WASAPI", 2, 48000),

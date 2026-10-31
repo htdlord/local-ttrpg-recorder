@@ -5,14 +5,14 @@ import json
 import numpy as np
 import soundfile as sf
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.exporters.formats import to_json, to_md
-from sessionscribe.core.pipeline.asr import Segment, SpeechInterval, Word
-from sessionscribe.core.pipeline.refill import uncovered
-from sessionscribe.core.pipeline.run import process_session
-from sessionscribe.core.quality import POSSIBLE_MISSED_SPEECH, REFILLED
-from sessionscribe.core.session import Participant, Session, SessionConfig, write_session
 from tests.fakes import FakeFactory
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.exporters.formats import to_json, to_md
+from ttrpg_recorder.core.pipeline.asr import Segment, SpeechInterval, Word
+from ttrpg_recorder.core.pipeline.refill import uncovered
+from ttrpg_recorder.core.pipeline.run import process_session
+from ttrpg_recorder.core.quality import POSSIBLE_MISSED_SPEECH, REFILLED
+from ttrpg_recorder.core.session import Participant, Session, SessionConfig, write_session
 
 R = 48_000
 IDENTITY = {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}

@@ -1,7 +1,7 @@
 import pytest
 
-from sessionscribe.core import config
-from sessionscribe.core.config import available_compute_types
+from ttrpg_recorder.core import config
+from ttrpg_recorder.core.config import available_compute_types
 
 
 def test_available_is_intersection_in_preference_order():
