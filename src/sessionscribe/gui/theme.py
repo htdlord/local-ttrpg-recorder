@@ -113,6 +113,10 @@ QProgressBar {{
 QProgressBar::chunk {{ background: {t.accent}; border-radius: {RADIUS - 2}px; }}
 QStatusBar {{ color: {t.text_muted}; }}
 QLabel[muted="true"] {{ color: {t.text_muted}; }}
+QLabel[caption="true"] {{
+    color: {t.text_muted}; font-size: 8pt;
+    font-family: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}}
 QLabel[heading="true"] {{ font-size: 13pt; font-weight: 600; }}
 QLabel[error="true"] {{ color: {t.error}; }}
 QLabel[warning="true"] {{ color: {t.warning}; }}

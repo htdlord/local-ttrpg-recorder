@@ -11,11 +11,22 @@ import signal
 import sys
 import threading
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+
+from sessionscribe.core.audio.guided import (
+    STALL_S,
+    Prompt,
+    Setup,
+    SetupError,
+    check_in_recording,
+    open_device,
+    recorder_config,
+    run_prompts,
+)
+from sessionscribe.core.audio.guided import resolve_setup as _resolve_setup
 
 record_app = typer.Typer(help="Record a session (multi-channel interface).", no_args_is_help=True)
 rig_app = typer.Typer(help="Saved recording setups (rig.toml).", no_args_is_help=True)
@@ -48,21 +59,6 @@ def _fail(message: str, code: int = 1) -> typer.Exit:
     return typer.Exit(code)
 
 
-@dataclass
-class Setup:
-    device: str
-    host_api: str
-    channels: tuple[int, ...]
-    ids: tuple[str, ...]
-    names: tuple[str, ...]
-    samplerate: int
-    blocksize: int
-    segment_min: float
-    format: str
-    idle_warn_min: float
-    wasapi_exclusive: bool
-
-
 def resolve_setup(
     rig: Path | None,
     device: str | None,
@@ -75,63 +71,26 @@ def resolve_setup(
     idle_warn_min: float | None = None,
 ) -> Setup:
     """Rig values, overridden by explicit flags; device and host API are required."""
-    from sessionscribe.core.audio.backend import parse_channel_spec
-    from sessionscribe.core.audio.manifest import RigConfig, read_rig
-
-    profile: RigConfig | None = read_rig(rig) if rig else None
-    dev = device or (profile.device if profile else None)
-    api = host_api or (profile.host_api if profile else None)
-    if not dev or not api:
-        raise _fail("name the device and its host API (--device, --host-api) or give --rig", 2)
-    if channels:
-        chans = parse_channel_spec(channels)
-    elif profile:
-        chans = tuple(c.channel for c in profile.channels)
-    else:
-        raise _fail("give --channels (or --rig)", 2)
-    if names:
-        ids = tuple(n.strip() for n in names.split(","))
-        labels = ids
-    elif profile and not channels:
-        ids = tuple(c.id for c in profile.channels)
-        labels = tuple(c.name or c.id for c in profile.channels)
-    elif profile:
-        by_ch = {c.channel: c for c in profile.channels}
-        ids = tuple(by_ch[c].id if c in by_ch else f"ch{c:02d}" for c in chans)
-        labels = tuple(by_ch[c].name or by_ch[c].id if c in by_ch else f"ch{c:02d}" for c in chans)
-    else:
-        ids = tuple(f"ch{c:02d}" for c in chans)
-        labels = ids
-    if len(ids) != len(chans):
-        raise _fail(f"{len(chans)} channel(s) but {len(ids)} name(s)", 2)
-    return Setup(
-        device=dev,
-        host_api=api,
-        channels=chans,
-        ids=ids,
-        names=labels,
-        samplerate=profile.samplerate if profile else 48_000,
-        blocksize=profile.blocksize if profile else 480,
-        segment_min=segment_min or (profile.segment_min if profile else 5.0),
-        format=fmt or (profile.format if profile else "flac"),
-        idle_warn_min=idle_warn_min or (profile.idle_warn_min if profile else 10.0),
-        wasapi_exclusive=profile.wasapi_exclusive if profile else False,
-    )
+    try:
+        return _resolve_setup(
+            rig,
+            device,
+            host_api,
+            channels,
+            names,
+            segment_min=segment_min,
+            fmt=fmt,
+            idle_warn_min=idle_warn_min,
+        )
+    except SetupError as exc:
+        raise _fail(str(exc), 2) from exc
 
 
 def _opener(setup: Setup) -> Any:
     from sessionscribe.core.audio.backend import AudioSetupError
-    from sessionscribe.core.audio.live import SoundDeviceOpener
 
     try:
-        return SoundDeviceOpener(
-            setup.device,
-            setup.host_api,
-            setup.channels,
-            setup.samplerate,
-            setup.blocksize,
-            wasapi_exclusive=setup.wasapi_exclusive,
-        )
+        return open_device(setup)
     except AudioSetupError as exc:
         raise _fail(str(exc)) from exc
 
@@ -259,45 +218,19 @@ def _print_checks(checks: list[Any]) -> str:
     return verdict
 
 
-STALL_S = 3.0  # no audio time progress for this long: the stream failed
+def _echo_prompt(prompt: Prompt) -> None:
+    if prompt.kind == "noise":
+        typer.echo(f"Everyone quiet for {prompt.seconds:.0f} s (noise level) ...")
+    elif prompt.kind == "turn":
+        typer.echo(f"  {prompt.label}: please speak now ({prompt.seconds:.0f} s) ...")
+    else:
+        typer.echo(f"\n{_badge('FAIL')} no audio is arriving; mic check aborted")
 
 
 def _prompt_turns(
     setup: Setup, noise_s: float, turn_s: float, now: Any, stop: threading.Event
 ) -> tuple[Any, Any] | None:
-    """Print the prompts on time; ``now()`` is the audio time in seconds (frames read).
-
-    Returns None when stopped (Ctrl+C) or when the audio time stops advancing.
-    """
-    from sessionscribe.core.audio.mic_check import plan_turns
-
-    noise, turns = plan_turns(setup.ids, noise_s, turn_s)
-    last = [time.monotonic(), now()]
-
-    def wait_until(t: float) -> bool:
-        while now() < t:
-            if stop.is_set():
-                return False
-            current = now()
-            if current > last[1]:
-                last[0], last[1] = time.monotonic(), current
-            elif time.monotonic() - last[0] > STALL_S:
-                typer.echo(f"\n{_badge('FAIL')} no audio is arriving; mic check aborted")
-                return False
-            time.sleep(0.05)
-        return True
-
-    if noise:
-        typer.echo(f"Everyone quiet for {noise_s:.0f} s (noise level) ...")
-        if not wait_until(noise[1]):
-            return None
-    for t, label in zip(turns, setup.names, strict=True):
-        if not wait_until(t.start_s - 0.5):
-            return None
-        typer.echo(f"  {label}: please speak now ({turn_s:.0f} s) ...")
-        if not wait_until(t.end_s):
-            return None
-    return noise, turns
+    return run_prompts(setup.ids, setup.names, noise_s, turn_s, now, stop, _echo_prompt)
 
 
 def _open_failed(exc: Exception) -> typer.Exit:
@@ -381,13 +314,11 @@ def record_start(
     The mic check is part of the recording, so its turns give guided coupling ranges;
     a FAILed check stops the recording unless --force.
     """
-    from sessionscribe.core.audio.mic_check import analyze
     from sessionscribe.core.audio.power import inhibit_sleep
     from sessionscribe.core.audio.recorder import (
         LevelEvent,
         Recorder,
         RecorderAlarm,
-        RecorderConfig,
         RecorderError,
         RecorderStatus,
     )
@@ -426,18 +357,7 @@ def record_start(
             typer.echo(f"{_badge('WARN')} cannot keep the computer awake: {inh.how}", err=True)
         return inh
 
-    cfg = RecorderConfig(
-        session_dir=session,
-        channels=setup.channels,
-        participants=setup.ids,
-        names=setup.names,
-        samplerate=setup.samplerate,
-        blocksize=setup.blocksize,
-        segment_s=setup.segment_min * 60,
-        format=setup.format,
-        planned_hours=hours,
-        idle_warn_s=setup.idle_warn_min * 60,
-    )
+    cfg = recorder_config(setup, session, hours)
     try:
         recorder = Recorder(cfg, opener, sink=sink, inhibit=inhibit)
         recorder.check_disk()
@@ -448,23 +368,26 @@ def record_start(
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *a: stop.set())
 
-    def mic_check() -> None:
-        # Recording time (frames written), so the turns are ranges in the recorded audio.
-        planned = _prompt_turns(setup, noise_s, turn_s, recorder.audio_time, stop)
-        if planned is None:
+    def show_result(result: Any) -> None:
+        if result.error:
+            typer.echo(f"\n{_badge('FAIL')} mic check: {result.error}")
             return
-        noise, turns = planned
-        time.sleep(0.5)
-        try:
-            checks = analyze(list(events), setup.channels, setup.ids, turns, noise)
-        except ValueError as exc:
-            typer.echo(f"\n{_badge('FAIL')} mic check: {exc}")
-            return
-        verdict = _print_checks(checks)
-        recorder.set_mic_check({t.participant: (t.start_s, t.end_s) for t in turns})
-        if verdict == "FAIL" and not force:
+        _print_checks(result.checks)
+        if result.stopping:
             typer.echo(f"{_badge('FAIL')} stopping: fix the channels above or use --force")
-            stop.set()
+
+    def mic_check() -> None:
+        check_in_recording(
+            recorder,
+            lambda: list(events),
+            setup,
+            noise_s,
+            turn_s,
+            stop,
+            force=force,
+            on_prompt=_echo_prompt,
+            on_result=show_result,
+        )
 
     typer.echo(
         f"Recording {len(setup.channels)} channel(s) from {opener.device_name} "

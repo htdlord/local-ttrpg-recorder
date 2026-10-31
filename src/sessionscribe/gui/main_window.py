@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -23,6 +24,7 @@ from sessionscribe.core.session import Session
 from sessionscribe.gui import i18n, icons, theme, workers
 from sessionscribe.gui.audio_preview import PreviewPlayer
 from sessionscribe.gui.state import AppState
+from sessionscribe.gui.tabs.record_tab import RecordTab
 from sessionscribe.gui.tabs.result_tab import ResultTab
 from sessionscribe.gui.tabs.run_tab import RunTab
 from sessionscribe.gui.tabs.session_tab import SessionTab
@@ -90,7 +92,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SessionScribe")
         self.resize(1200, 800)
         self._current_export: ProcessWorker | None = None
+        self.confirm_close: Callable[[], bool] = self._ask_close
         self.build()
+        if self._reconnected:
+            self.tabs.setCurrentWidget(self.record_tab)
         self.state.session_changed.connect(self._session_opened)
 
     # --- building (again after a theme or language change) ---
@@ -104,11 +109,13 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.session_tab = SessionTab(self.state, t)
+        self.record_tab = RecordTab(self.state, t, self.prefs)
         self.settings_tab = SettingsTab(self.state, t)
         self.run_tab = RunTab(self.state, t)
         self.result_tab = ResultTab(self.state, t, self.player)
         for widget, name, title in (
             (self.session_tab, "session", self.tr("Session")),
+            (self.record_tab, "record", self.tr("Record")),
             (self.settings_tab, "settings", self.tr("Settings")),
             (self.run_tab, "run", self.tr("Run")),
             (self.result_tab, "result", self.tr("Result")),
@@ -118,6 +125,9 @@ class MainWindow(QMainWindow):
         self.run_tab.finished.connect(lambda: self.tabs.setCurrentWidget(self.result_tab))
         self.result_tab.reassigned.connect(self._reexport)
         self.session_tab.saved.connect(self._remember)
+        self.record_tab.finished.connect(self._recorded)
+        # a recording that runs (or crashed) since the last window: follow it again
+        self._reconnected = self.record_tab.reconnect()
         self._build_menus()
         self._update_title()
 
@@ -246,7 +256,25 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"SessionScribe - {s.name}" if s else "SessionScribe")
         self.statusBar().showMessage(str(s.folder) if s else self.tr("No session open"))
 
+    def _recorded(self, folder: Path) -> None:
+        self.open_path(folder / "session.toml")
+        self.tabs.setCurrentWidget(self.session_tab)
+
+    def _ask_close(self) -> bool:
+        answer = QMessageBox.question(
+            self,
+            self.tr("Recording in progress"),
+            self.tr(
+                "The recording continues in the background after the window closes. "
+                "Open SessionScribe again to follow or stop it. Close the window?"
+            ),
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self.record_tab.recording and not self.confirm_close():
+            event.ignore()
+            return
         # Completed chunks stay cached; a cancelled run resumes next time.
         workers.stop_all()
         super().closeEvent(event)

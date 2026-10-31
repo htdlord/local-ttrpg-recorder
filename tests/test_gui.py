@@ -62,7 +62,7 @@ def window(qtbot, tmp_path, factory=None, log=None):
 
 def test_window_starts_with_empty_states(qtbot, tmp_path):
     w, _ = window(qtbot, tmp_path)
-    assert w.tabs.count() == 4
+    assert w.tabs.count() == 5
     assert w.session_tab.stack.currentIndex() == 0  # empty state
     assert w.result_tab.stack.currentIndex() == 0
     assert not w.run_tab.run_btn.isEnabled()
@@ -175,7 +175,7 @@ def test_settings_are_mode_aware(qtbot, tmp_path):
 def test_theme_switch_rebuilds_the_window(qtbot, tmp_path):
     w, _ = window(qtbot, tmp_path)
     w.set_preference("theme", "dark")
-    assert w.tokens.background == "#14181d" and w.tabs.count() == 4
+    assert w.tokens.background == "#14181d" and w.tabs.count() == 5
     w.set_preference("theme", "light")
     assert w.tokens.background == "#f4f6f8"
 
@@ -247,3 +247,17 @@ def test_closing_during_a_run_does_not_hang(qtbot, tmp_path):
     t0 = time.monotonic()
     w.close()  # cancels; completed chunks stay cached
     assert time.monotonic() - t0 < 10 and workers.running() == 0
+
+
+def test_every_advanced_setting_has_a_title_and_its_toml_key(qtbot, tmp_path):
+    from PySide6.QtWidgets import QLabel
+
+    from sessionscribe.gui.models.settings_form import field_specs
+
+    w, _ = window(qtbot, tmp_path)
+    titles = w.settings_tab.field_titles()
+    assert set(titles) == {s.path for s in field_specs()}
+    captions = {
+        lbl.text() for lbl in w.settings_tab.findChildren(QLabel) if lbl.property("caption") is True
+    }
+    assert "model.compute_type" in captions and len(captions) == len(titles)

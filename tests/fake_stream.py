@@ -112,3 +112,51 @@ class FakeOpener:
 
     def refresh(self) -> None:
         self.refreshes += 1
+
+
+def child_opener(setup) -> FakeOpener:
+    """Device for the recorder child process in tests (``SESSIONSCRIBE_TEST_OPENER``).
+
+    About real time, endless. ``SESSIONSCRIBE_TEST_SCENARIO``:
+    - ``steady`` (default): every channel speaks;
+    - ``mic_ok``: each channel speaks only in its own mic-check turn (1 s noise, 1 s
+      turns, see ``plan_turns``), after that all of them;
+    - ``mic_dead2``: like ``mic_ok`` but the second channel is never voiced.
+    """
+    import os
+
+    from sessionscribe.core.audio.mic_check import plan_turns
+
+    n = len(setup.channels)
+    rate, blocksize = setup.samplerate, setup.blocksize
+    scenario = os.environ.get("SESSIONSCRIBE_TEST_SCENARIO", "steady")
+    turn_s = float(os.environ.get("SESSIONSCRIBE_TEST_TURN_S", "1"))  # = --noise-s/--turn-s
+    _, turns = plan_turns(setup.ids, turn_s, turn_s)
+    end = turns[-1].end_s + 1.0
+
+    def amps(b: int) -> list[float]:
+        t = b * blocksize / rate
+        if scenario == "steady":
+            return [0.3] * n
+        out = [0.0] * n
+        if t >= end:
+            out = [0.3] * n
+        for turn in turns:
+            if turn.start_s - 0.3 <= t < turn.end_s:
+                out[turn.channel_index] = 0.3
+        if scenario == "mic_dead2" and n > 1:
+            out[1] = 0.0
+        return out
+
+    return FakeOpener(
+        [
+            Scenario(
+                blocks=10**9,
+                blocksize=blocksize,
+                channels=n,
+                rate=rate,
+                amps_fn=amps,
+                block_sleep=blocksize / rate,
+            )
+        ]
+    )
