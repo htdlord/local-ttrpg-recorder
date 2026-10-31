@@ -5,6 +5,10 @@ which installs the exact package versions in `uv.lock`. The same steps run on cl
 Windows and Ubuntu machines in CI (`.github/workflows/install.yml`). See
 [SUPPORTED.md](SUPPORTED.md) for what has been tested.
 
+Run the commands in a terminal: on Windows in **PowerShell** or **Windows Terminal**, on
+Linux in any shell. Every `uv run …` command runs from the cloned `sessionscribe` folder
+(the one with `pyproject.toml`), so `cd` into it first.
+
 ## 1. Prerequisites
 
 | | Windows 10/11 | Linux (Ubuntu 22.04/24.04 or similar) |
@@ -13,18 +17,31 @@ Windows and Ubuntu machines in CI (`.github/workflows/install.yml`). See
 | uv | `powershell -c "irm https://astral.sh/uv/install.ps1 \| iex"` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Python | installed by uv (3.11 or 3.12) | installed by uv (3.11 or 3.12) |
 | System libraries | – | `sudo apt install libportaudio2 libegl1 libxkbcommon0 libgl1` |
-| NVIDIA GPU (optional) | current NVIDIA driver (CUDA 12 support, R528 or newer) | current NVIDIA driver (R525 or newer) |
+| NVIDIA GPU (optional) | NVIDIA driver R525 or newer (a current driver is recommended) | NVIDIA driver R525 or newer (a current driver is recommended) |
 
 You do **not** need to install the CUDA Toolkit or cuDNN: the `cuda` extra brings the
 libraries ctranslate2 needs (cuBLAS 12, cuDNN 9) as Python packages. A system CUDA
 install does no harm. Without an NVIDIA GPU everything runs on the CPU, much slower.
+
+**Driver version.** R525 is the minimum NVIDIA lists for CUDA 12.x minor version
+compatibility, the same on Windows and Linux; newer drivers (R580 and later included) run
+CUDA 12 applications through backward compatibility. Under minor version compatibility
+some features are limited and code that needs PTX compilation does not run, so if
+`doctor` reports a CUDA error on an older driver, install the current driver (the
+`cuda` extra currently brings CUDA 12.9 libraries, whose own driver generation is
+R575/R576). Sources: NVIDIA
+[CUDA minor version compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html)
+and the [CUDA Toolkit release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html)
+(checked 2026-10-31).
 
 ## 2. Install
 
 ```bash
 git clone https://github.com/htdlord/sessionscribe.git
 cd sessionscribe
-git checkout v0.1.0            # a release tag; skip to use the latest development state
+# only after v0.1.0 is released (the tag does not exist yet); without it you get
+# the latest development state on main:
+git checkout v0.1.0
 uv sync --locked --extra gui --extra cuda
 ```
 

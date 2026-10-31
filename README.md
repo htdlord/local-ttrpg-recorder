@@ -24,7 +24,7 @@ timestamped transcript (txt, srt, vtt, json, md).
 A SessionScribe helyben futó, többsávos beszédfelismerő asztali szerepjáték-sessionökhöz.
 Mindenkinek saját csiptetős mikrofonja van, a program sávonként ír át (faster-whisper),
 kiszűri az áthallást, és egyetlen, beszélőnként címkézett, időbélyeges leiratot készít.
-A modellek letöltése után teljesen offline működik; magyarul és angolul egyaránt jól.
+A modellek letöltése után teljesen offline működik, magyar és angol nyelven egyaránt jól működik.
 
 1. **Telepítés:** Git és [uv](https://docs.astral.sh/uv/) kell, aztán
    `git clone https://github.com/htdlord/sessionscribe.git`, `cd sessionscribe`,
