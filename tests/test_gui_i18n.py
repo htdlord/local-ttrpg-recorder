@@ -62,7 +62,7 @@ def test_window_starts_in_hungarian(qtbot, tmp_path):
         w = MainWindow(settings=prefs)
         qtbot.addWidget(w)
         titles = [w.tabs.tabText(i) for i in range(w.tabs.count())]
-        assert titles == ["Session", "Beállítások", "Futtatás", "Eredmény"]
+        assert titles == ["Session", "Felvétel", "Beállítások", "Futtatás", "Eredmény"]
         assert w.statusBar().currentMessage() == "Nincs megnyitott session"
     finally:
         i18n.install(app, "en")
