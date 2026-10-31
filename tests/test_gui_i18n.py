@@ -64,5 +64,7 @@ def test_window_starts_in_hungarian(qtbot, tmp_path):
         titles = [w.tabs.tabText(i) for i in range(w.tabs.count())]
         assert titles == ["Session", "Felvétel", "Beállítások", "Futtatás", "Eredmény"]
         assert w.statusBar().currentMessage() == "Nincs megnyitott session"
+        tip = w.settings_tab.editors["model.compute_type"].control.toolTip()
+        assert tip == "Alapból: float16 CUDA-n, int8 CPU-n."
     finally:
         i18n.install(app, "en")

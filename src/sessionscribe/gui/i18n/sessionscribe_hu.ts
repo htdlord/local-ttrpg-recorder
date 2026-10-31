@@ -146,318 +146,318 @@
 <context>
     <name>RecordTab</name>
     <message>
-        <location filename="../tabs/record_tab.py" line="114" />
+        <location filename="../tabs/record_tab.py" line="115" />
         <source>Interface</source>
         <translation>Hangkártya</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="124" />
+        <location filename="../tabs/record_tab.py" line="125" />
         <source>Refresh</source>
         <translation>Frissítés</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="129" />
+        <location filename="../tabs/record_tab.py" line="130" />
         <source>Device</source>
         <translation>Eszköz</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="134" />
+        <location filename="../tabs/record_tab.py" line="135" />
         <source>Channels and participants</source>
         <translation>Csatornák és résztvevők</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="138" />
+        <location filename="../tabs/record_tab.py" line="139" />
         <source>Channel</source>
         <translation>Csatorna</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="138" />
+        <location filename="../tabs/record_tab.py" line="139" />
         <source>Id</source>
         <translation>Azonosító</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="138" />
+        <location filename="../tabs/record_tab.py" line="139" />
         <source>Name</source>
         <translation>Név</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="145" />
+        <location filename="../tabs/record_tab.py" line="146" />
         <source>Add channel</source>
         <translation>Csatorna hozzáadása</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="147" />
+        <location filename="../tabs/record_tab.py" line="148" />
         <source>Remove selected</source>
         <translation>Kijelölt törlése</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="149" />
+        <location filename="../tabs/record_tab.py" line="150" />
         <source>Load rig…</source>
         <translation>Rig betöltése…</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="151" />
+        <location filename="../tabs/record_tab.py" line="152" />
         <source>Save rig…</source>
         <translation>Rig mentése…</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="164" />
-        <location filename="../tabs/record_tab.py" line="482" />
+        <location filename="../tabs/record_tab.py" line="165" />
+        <location filename="../tabs/record_tab.py" line="484" />
         <source>Recording</source>
         <translation>Felvétel</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="168" />
+        <location filename="../tabs/record_tab.py" line="169" />
         <source>New session folder, e.g. recordings/2026-11-05</source>
         <translation>Új session mappája, pl. recordings/2026-11-05</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="169" />
+        <location filename="../tabs/record_tab.py" line="170" />
         <source>Browse…</source>
         <translation>Tallózás…</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="173" />
-        <location filename="../tabs/record_tab.py" line="359" />
+        <location filename="../tabs/record_tab.py" line="174" />
+        <location filename="../tabs/record_tab.py" line="360" />
         <source>Session folder</source>
         <translation>Session mappája</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="179" />
+        <location filename="../tabs/record_tab.py" line="180" />
         <source>Planned length</source>
         <translation>Tervezett hossz</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="180" />
+        <location filename="../tabs/record_tab.py" line="181" />
         <source>Guided mic check at the start</source>
         <translation>Vezetett mikrofonpróba az elején</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="182" />
+        <location filename="../tabs/record_tab.py" line="183" />
         <source>Keep recording if the mic check fails</source>
         <translation>Sikertelen mikrofonpróba esetén is folytassa</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="186" />
+        <location filename="../tabs/record_tab.py" line="187" />
         <source>Start recording</source>
         <translation>Felvétel indítása</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="188" />
+        <location filename="../tabs/record_tab.py" line="189" />
         <source>Stop</source>
         <translation>Leállítás</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="199" />
+        <location filename="../tabs/record_tab.py" line="200" />
         <source>Live</source>
         <translation>Élő</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="201" />
+        <location filename="../tabs/record_tab.py" line="202" />
         <source>Not recording</source>
         <translation>Nincs felvétel</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="224" />
+        <location filename="../tabs/record_tab.py" line="225" />
         <source>Recover</source>
         <translation>Helyreállítás</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="226" />
+        <location filename="../tabs/record_tab.py" line="227" />
         <source>Open in Session tab</source>
         <translation>Megnyitás a Session fülön</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="234" />
-        <location filename="../tabs/record_tab.py" line="481" />
+        <location filename="../tabs/record_tab.py" line="235" />
+        <location filename="../tabs/record_tab.py" line="483" />
         <source>Mic check</source>
         <translation>Mikrofonpróba</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="238" />
+        <location filename="../tabs/record_tab.py" line="239" />
         <source>Participant</source>
         <translation>Résztvevő</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="238" />
+        <location filename="../tabs/record_tab.py" line="239" />
         <source>Result</source>
         <translation>Eredmény</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="238" />
-        <location filename="../tabs/record_tab.py" line="246" />
+        <location filename="../tabs/record_tab.py" line="239" />
+        <location filename="../tabs/record_tab.py" line="247" />
         <source>Alarms</source>
         <translation>Riasztások</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="286" />
+        <location filename="../tabs/record_tab.py" line="287" />
         <source>Load rig</source>
         <translation>Rig betöltése</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="306" />
+        <location filename="../tabs/record_tab.py" line="307" />
         <source>Save rig</source>
         <translation>Rig mentése</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="328" />
+        <location filename="../tabs/record_tab.py" line="329" />
         <source>Looking for devices …</source>
         <translation>Eszközök keresése …</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="343" />
+        <location filename="../tabs/record_tab.py" line="344" />
         <source>{0} input device(s)</source>
         <translation>{0} bemeneti eszköz</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="373" />
+        <location filename="../tabs/record_tab.py" line="374" />
         <source>Choose a session folder.</source>
         <translation>Válassz session-mappát.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="427" />
-        <location filename="../tabs/record_tab.py" line="483" />
+        <location filename="../tabs/record_tab.py" line="428" />
+        <location filename="../tabs/record_tab.py" line="485" />
         <source>Stopping …</source>
         <translation>Leállítás …</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="444" />
+        <location filename="../tabs/record_tab.py" line="445" />
         <source>Recovered: {0} segment file(s), {1} with a problem</source>
         <translation>Helyreállítva: {0} szegmensfájl, ebből {1} hibás</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="480" />
+        <location filename="../tabs/record_tab.py" line="482" />
         <source>Starting …</source>
         <translation>Indítás …</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="484" />
+        <location filename="../tabs/record_tab.py" line="486" />
         <source>Stopped</source>
         <translation>Leállítva</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="485" />
-        <location filename="../tabs/record_tab.py" line="602" />
+        <location filename="../tabs/record_tab.py" line="487" />
+        <location filename="../tabs/record_tab.py" line="604" />
         <source>Failed</source>
         <translation>Hiba</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="489" />
+        <location filename="../tabs/record_tab.py" line="491" />
         <source>Recorder not responding</source>
         <translation>A felvevő nem válaszol</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="491" />
+        <location filename="../tabs/record_tab.py" line="493" />
         <source>Recording interrupted</source>
         <translation>A felvétel megszakadt</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="493" />
+        <location filename="../tabs/record_tab.py" line="495" />
         <source>Time {0}</source>
         <translation>Idő: {0}</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="495" />
+        <location filename="../tabs/record_tab.py" line="497" />
         <source>buffer {0:.0%}</source>
         <translation>puffer: {0:.0%}</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="497" />
+        <location filename="../tabs/record_tab.py" line="499" />
         <source>disk {0:.1f} h</source>
         <translation>lemez: {0:.1f} óra</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="498" />
+        <location filename="../tabs/record_tab.py" line="500" />
         <source>{0} gap(s)</source>
         <translation>{0} kimaradás</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="507" />
+        <location filename="../tabs/record_tab.py" line="509" />
         <source>The recorder stopped without a clean stop (crash or power loss). Recover makes the last files readable; then you can continue into the same folder.</source>
         <translation>A felvevő szabályos leállítás nélkül állt le (összeomlás vagy áramszünet). A Helyreállítás olvashatóvá teszi az utolsó fájlokat; utána ugyanabba a mappába folytathatod a felvételt.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="519" />
+        <location filename="../tabs/record_tab.py" line="521" />
         <source>Stopped: {0} min, {1} segment file(s), {2} gap(s)</source>
         <translation>Leállítva: {0} perc, {1} szegmensfájl, {2} kimaradás</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="535" />
+        <location filename="../tabs/record_tab.py" line="537" />
         <source>Everyone quiet, please ({0:.0f} s)</source>
         <translation>Mindenki maradjon csendben ({0:.0f} s)</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="537" />
+        <location filename="../tabs/record_tab.py" line="539" />
         <source>{0}: please speak now ({1:.0f} s)</source>
         <translation>{0}: most beszélj ({1:.0f} s)</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="568" />
+        <location filename="../tabs/record_tab.py" line="570" />
         <source>Check the cable and the interface; it reconnects by itself.</source>
         <translation>Ellenőrizd a kábelt és a hangkártyát; a kapcsolat magától helyreáll.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="569" />
+        <location filename="../tabs/record_tab.py" line="571" />
         <source>Audio is back; the missing time is marked as a gap.</source>
         <translation>Visszajött a hang; a kiesett idő kimaradásként van jelölve.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="571" />
+        <location filename="../tabs/record_tab.py" line="573" />
         <source>Unplugged or muted mic? Nothing to do if they are just quiet.</source>
         <translation>Kihúzott vagy némított mikrofon? Ha az illető csak hallgat, nincs teendő.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="573" />
+        <location filename="../tabs/record_tab.py" line="575" />
         <source>Free some disk space now.</source>
         <translation>Szabadíts fel most helyet a lemezen.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="574" />
+        <location filename="../tabs/record_tab.py" line="576" />
         <source>The disk is full: the recording stopped.</source>
         <translation>Megtelt a lemez: a felvétel leállt.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="575" />
+        <location filename="../tabs/record_tab.py" line="577" />
         <source>The recorder cannot go on: restart it into the same folder.</source>
         <translation>A felvevő nem tud tovább dolgozni: indítsd újra ugyanabba a mappába.</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="602" />
+        <location filename="../tabs/record_tab.py" line="604" />
         <source>OK</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="602" />
+        <location filename="../tabs/record_tab.py" line="604" />
         <source>Check</source>
         <translation>Figyelem</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="604" />
+        <location filename="../tabs/record_tab.py" line="606" />
         <source>no signal</source>
         <translation>nincs jel</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="605" />
+        <location filename="../tabs/record_tab.py" line="607" />
         <source>wrong channel</source>
         <translation>rossz csatorna</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="606" />
+        <location filename="../tabs/record_tab.py" line="608" />
         <source>too quiet</source>
         <translation>túl halk</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="607" />
+        <location filename="../tabs/record_tab.py" line="609" />
         <source>clipping</source>
         <translation>túlvezérlés</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="631" />
+        <location filename="../tabs/record_tab.py" line="634" />
         <source>Mic check failed: {0}</source>
         <translation>A mikrofonpróba sikertelen: {0}</translation>
     </message>
     <message>
-        <location filename="../tabs/record_tab.py" line="640" />
+        <location filename="../tabs/record_tab.py" line="643" />
         <source>The mic check failed, so the recording stopped. Fix the channels and start again into the same folder, or tick 'Keep recording if the mic check fails'.</source>
         <translation>A mikrofonpróba sikertelen volt, ezért a felvétel leállt. Javítsd a csatornákat, és indítsd újra ugyanabba a mappába, vagy jelöld be a „Sikertelen mikrofonpróba esetén is folytassa” lehetőséget.</translation>
     </message>
@@ -1215,23 +1215,188 @@
         <translation>Munkamappa</translation>
     </message>
     <message>
+        <location filename="../tabs/settings_tab.py" line="322" />
+        <source>Model size name or local model folder.</source>
+        <translation>Modellméret neve vagy helyi modellmappa.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="323" />
+        <source>Hugging Face revision (default: latest).</source>
+        <translation>Hugging Face-változat (alapból a legújabb).</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="324" />
+        <source>Default: float16 on cuda, int8 on cpu.</source>
+        <translation>Alapból: float16 CUDA-n, int8 CPU-n.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="325" />
+        <source>Default: physical cores.</source>
+        <translation>Alapból: a fizikai magok száma.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="326" />
+        <source>Download folder (default: HF cache).</source>
+        <translation>Letöltési mappa (alapból a HF-gyorsítótár).</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="327" />
+        <source>Use locally cached models only, no network.</source>
+        <translation>Csak a helyben tárolt modellek, hálózat nélkül.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="329" />
+        <source>Fast mode starting batch size (default 16); halves on OOM down to 1.</source>
+        <translation>Kezdő kötegméret fast módban (alapból 16); memóriahiánykor feleződik, legfeljebb 1-ig.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="332" />
+        <source>Fast mode: on GPU OOM retry with half the batch size (for smaller GPUs).</source>
+        <translation>Fast mód: ha elfogy a GPU-memória, fele akkora kötegekkel próbálja újra (kisebb GPU-khoz).</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="334" />
+        <source>Owned range per chunk.</source>
+        <translation>Egy chunk saját (birtokolt) tartománya.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="335" />
+        <source>Extra audio ASR sees on each side.</source>
+        <translation>Ennyi plusz hangot lát az ASR mindkét oldalon.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="337" />
+        <source>How far a boundary may move to the quietest point.</source>
+        <translation>Ennyivel tolódhat el egy chunkhatár a legcsendesebb pontig.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="339" />
+        <source>Re-transcribe VAD speech without words.</source>
+        <translation>A szó nélkül maradt VAD-beszéd újraátírása.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="340" />
+        <source>Shortest word-less stretch to refill.</source>
+        <translation>A legrövidebb szó nélküli szakasz, amit újraír.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="341" />
+        <source>Audio added around a refill window.</source>
+        <translation>Ennyi hang kerül az újraírt ablak köré.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="342" />
+        <source>ISO code (hu, en, ...) or auto.</source>
+        <translation>ISO-kód (hu, en, …) vagy auto.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="343" />
+        <source>Expert option: mute instead of attenuate (pre mode).</source>
+        <translation>Szakértői beállítás: némítás csillapítás helyett (pre mód).</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="344" />
+        <source>Ownership lasts this long after a frame.</source>
+        <translation>Az ownership ennyi ideig tart egy keret után.</translation>
+    </message>
+    <message>
         <location filename="../tabs/settings_tab.py" line="345" />
+        <source>Pre mode: gain ramp back to attenuation.</source>
+        <translation>Pre mód: ennyi idő alatt tér vissza a csillapításra.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="347" />
+        <source>A track owns nothing quieter than its noise level + this.</source>
+        <translation>Egy sáv semmit nem birtokol, ami halkabb a zajszintjénél + ennyinél.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="349" />
+        <source>Ownership under this may be suppressed as bleed.</source>
+        <translation>Ez alatti ownership esetén áthallásként kiszűrhető.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="350" />
+        <source>Ownership under this is flagged low_ownership.</source>
+        <translation>Ez alatti ownership low_ownership jelölést kap.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="351" />
+        <source>Bleed text must match the source's words this well.</source>
+        <translation>Az áthallás szövegének ennyire kell egyeznie a forrás szavaival.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="353" />
+        <source>A mic whose speech level is this close to its noise is silent.</source>
+        <translation>Az a mikrofon néma, amelynek beszédszintje ennyire közel van a zajszintjéhez.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="355" />
+        <source>Frames needed per mic pair.</source>
+        <translation>Mikrofonpáronként ennyi keret kell.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="356" />
+        <source>Coupling for pairs with too few frames.</source>
+        <translation>Csatolás a túl kevés keretű párokra.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="357" />
+        <source>Flag avg_logprob below this.</source>
+        <translation>Jelölés, ha az avg_logprob ez alatt van.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="358" />
+        <source>Flag no_speech_prob above this.</source>
+        <translation>Jelölés, ha a no_speech_prob e fölött van.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="359" />
+        <source>... when avg_logprob is also below this.</source>
+        <translation>… ha az avg_logprob is ez alatt van.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="360" />
+        <source>Flag compression ratio above this.</source>
+        <translation>Jelölés, ha a tömörítési arány e fölött van.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="361" />
+        <source>n of the repeated n-gram check.</source>
+        <translation>Az ismétlődő n-gram ellenőrzés n értéke.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="362" />
+        <source>Occurrences that count as a loop.</source>
+        <translation>Ennyi előfordulás már huroknak számít.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="364" />
+        <source>Text too long for its voiced time (at least 1 s counted).</source>
+        <translation>Túl hosszú szöveg a zöngés időhöz képest (legalább 1 s-mal számolva).</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="367" />
+        <source>Flag segments with less of their time in VAD speech.</source>
+        <translation>Jelölés, ha a szegmens idejéből ennél kisebb rész VAD-beszéd.</translation>
+    </message>
+    <message>
+        <location filename="../tabs/settings_tab.py" line="397" />
         <source>{0} setting(s) differ from the preset: {1}</source>
         <translation>{0} beállítás tér el a presettől: {1}</translation>
     </message>
     <message>
-        <location filename="../tabs/settings_tab.py" line="349" />
+        <location filename="../tabs/settings_tab.py" line="401" />
         <source>Same as the preset.</source>
         <translation>Megegyezik a presettel.</translation>
     </message>
     <message>
-        <location filename="../tabs/settings_tab.py" line="363" />
-        <location filename="../tabs/settings_tab.py" line="376" />
+        <location filename="../tabs/settings_tab.py" line="415" />
+        <location filename="../tabs/settings_tab.py" line="428" />
         <source>Saved to {0}</source>
         <translation>Mentve ide: {0}</translation>
     </message>
     <message>
-        <location filename="../tabs/settings_tab.py" line="370" />
+        <location filename="../tabs/settings_tab.py" line="422" />
         <source>Save preset</source>
         <translation>Preset mentése</translation>
     </message>

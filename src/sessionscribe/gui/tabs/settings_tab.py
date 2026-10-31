@@ -50,7 +50,7 @@ def _field_title(title: str, key: str) -> QWidget:
 class FieldEditor(QWidget):
     """One setting: a control matching its kind, plus a muted mode note."""
 
-    def __init__(self, spec: sf.FieldSpec, on_change: Any) -> None:
+    def __init__(self, spec: sf.FieldSpec, on_change: Any, tip: str = "") -> None:
         super().__init__()
         self.spec = spec
         self.on_change = on_change
@@ -89,8 +89,8 @@ class FieldEditor(QWidget):
                 edit.setPlaceholderText(self.tr("automatic"))
             edit.editingFinished.connect(lambda: self._text_changed(edit))
             self.control = edit
-        if spec.description:
-            self.control.setToolTip(spec.description)
+        if tip or spec.description:
+            self.control.setToolTip(tip or spec.description)
         layout.addWidget(self.control, 1)
         self.note = label(muted=True)
         layout.addWidget(self.note)
@@ -234,7 +234,7 @@ class SettingsTab(QWidget):
         self._session_changed()
 
     def _editor(self, spec: sf.FieldSpec, key: str) -> FieldEditor:
-        editor = FieldEditor(spec, self._changed)
+        editor = FieldEditor(spec, self._changed, self.field_tips().get(spec.path, ""))
         self.editors[key] = editor
         return editor
 
@@ -314,6 +314,58 @@ class SettingsTab(QWidget):
             "output.filename_template": self.tr("File name template"),
             "output.output_dir": self.tr("Output folder"),
             "output.work_dir": self.tr("Work folder"),
+        }
+
+    def field_tips(self) -> dict[str, str]:
+        """Translated tooltips; the English text is the field's description in core.config."""
+        return {
+            "model.id": self.tr("Model size name or local model folder."),
+            "model.revision": self.tr("Hugging Face revision (default: latest)."),
+            "model.compute_type": self.tr("Default: float16 on cuda, int8 on cpu."),
+            "model.cpu_threads": self.tr("Default: physical cores."),
+            "model.model_dir": self.tr("Download folder (default: HF cache)."),
+            "model.offline": self.tr("Use locally cached models only, no network."),
+            "asr.batch_size": self.tr(
+                "Fast mode starting batch size (default 16); halves on OOM down to 1."
+            ),
+            "asr.oom_fallback": self.tr(
+                "Fast mode: on GPU OOM retry with half the batch size (for smaller GPUs)."
+            ),
+            "asr.chunk_owned_s": self.tr("Owned range per chunk."),
+            "asr.chunk_context_s": self.tr("Extra audio ASR sees on each side."),
+            "asr.chunk_boundary_search_s": self.tr(
+                "How far a boundary may move to the quietest point."
+            ),
+            "asr.refill_holes": self.tr("Re-transcribe VAD speech without words."),
+            "asr.refill_min_s": self.tr("Shortest word-less stretch to refill."),
+            "asr.refill_pad_s": self.tr("Audio added around a refill window."),
+            "decoding.language": self.tr("ISO code (hu, en, ...) or auto."),
+            "bleed.mute": self.tr("Expert option: mute instead of attenuate (pre mode)."),
+            "bleed.hold_ms": self.tr("Ownership lasts this long after a frame."),
+            "bleed.release_ms": self.tr("Pre mode: gain ramp back to attenuation."),
+            "bleed.floor_above_noise_db": self.tr(
+                "A track owns nothing quieter than its noise level + this."
+            ),
+            "bleed.suppress_below": self.tr("Ownership under this may be suppressed as bleed."),
+            "bleed.low_ownership_below": self.tr("Ownership under this is flagged low_ownership."),
+            "bleed.text_similarity": self.tr("Bleed text must match the source's words this well."),
+            "bleed.silent_mic_range_db": self.tr(
+                "A mic whose speech level is this close to its noise is silent."
+            ),
+            "bleed.coupling_min_frames": self.tr("Frames needed per mic pair."),
+            "bleed.coupling_default_db": self.tr("Coupling for pairs with too few frames."),
+            "quality.low_logprob": self.tr("Flag avg_logprob below this."),
+            "quality.high_no_speech": self.tr("Flag no_speech_prob above this."),
+            "quality.high_no_speech_logprob": self.tr("... when avg_logprob is also below this."),
+            "quality.high_compression": self.tr("Flag compression ratio above this."),
+            "quality.repeated_ngram": self.tr("n of the repeated n-gram check."),
+            "quality.repeated_ngram_times": self.tr("Occurrences that count as a loop."),
+            "quality.max_chars_per_s": self.tr(
+                "Text too long for its voiced time (at least 1 s counted)."
+            ),
+            "quality.min_vad_fraction": self.tr(
+                "Flag segments with less of their time in VAD speech."
+            ),
         }
 
     def _changed(self, spec: sf.FieldSpec, value: Any) -> None:
