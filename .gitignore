@@ -62,3 +62,6 @@ recordings/
 hf_cache/
 .hf_cache/
 huggingface/
+
+# Demo session built by `sessionscribe demo` (downloaded audio)
+/demo/

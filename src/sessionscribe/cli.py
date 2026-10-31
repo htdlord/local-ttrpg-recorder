@@ -733,6 +733,23 @@ def clean(
     typer.echo(f"Deleted {work}")
 
 
+@app.command()
+def demo(
+    folder: Annotated[Path, typer.Argument(help="Folder for the demo session.")] = Path("demo"),
+    offline: Annotated[bool, typer.Option(help="Use the already downloaded sources only.")] = False,
+) -> None:
+    """Build a demo session (4 fictional players, public-domain LibriVox voices, ~2 min)."""
+    from sessionscribe.core.demo import create_demo
+
+    try:
+        path = create_demo(folder, offline=offline)
+    except (FileExistsError, FileNotFoundError, ValueError, OSError) as exc:
+        typer.echo(f"{_badge('FAIL')} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"{_badge('OK')} {path} (sources and credits: {path.parent / 'SOURCES.md'})")
+    typer.echo(f"Next: sessionscribe transcribe --session {path.parent}")
+
+
 from sessionscribe.cli_bench import bench_app  # noqa: E402
 from sessionscribe.cli_record import record_app  # noqa: E402
 
