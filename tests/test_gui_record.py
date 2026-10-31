@@ -98,6 +98,7 @@ def test_mic_check_prompt_and_results(qtbot, tmp_path, fake_audio, monkeypatch):
     tab.start_recording()
     qtbot.waitUntil(lambda: "Mesélő" in tab.prompt.text() and tab.prompt.isVisible(), timeout=30000)
     qtbot.waitUntil(lambda: tab.check_table.rowCount() == 3, timeout=30000)
+    assert tab.check_table.item(1, 0).text() == "Anna"  # names, not ids
     verdicts = [tab.check_table.item(r, 1).text() for r in range(3)]
     assert verdicts[1] == "Failed"
     # a failed check stops the recording by itself (no force)

@@ -130,7 +130,8 @@ def child_opener(setup) -> FakeOpener:
     n = len(setup.channels)
     rate, blocksize = setup.samplerate, setup.blocksize
     scenario = os.environ.get("SESSIONSCRIBE_TEST_SCENARIO", "steady")
-    _, turns = plan_turns(setup.ids, 1.0, 1.0)
+    turn_s = float(os.environ.get("SESSIONSCRIBE_TEST_TURN_S", "1"))  # = --noise-s/--turn-s
+    _, turns = plan_turns(setup.ids, turn_s, turn_s)
     end = turns[-1].end_s + 1.0
 
     def amps(b: int) -> list[float]:

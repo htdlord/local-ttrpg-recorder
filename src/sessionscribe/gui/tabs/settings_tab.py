@@ -209,7 +209,7 @@ class SettingsTab(QWidget):
         for section, specs in by_section.items():
             page = QWidget()
             form = QFormLayout(page)
-            form.setVerticalSpacing(8)
+            form.setVerticalSpacing(12)  # each title has its TOML key under it
             titles = self.field_titles()
             for spec in specs:
                 form.addRow(

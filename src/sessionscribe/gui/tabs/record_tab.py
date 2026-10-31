@@ -94,6 +94,7 @@ class RecordTab(QWidget):
         self.base_rig: RigConfig | None = None
         self.devices: list[dict[str, Any]] = []
         self.meter_widgets: list[tuple[QLabel, LevelMeter, QLabel]] = []
+        self.names: dict[str, str] = {}  # participant id -> display name
         self.timer = QTimer(self)
         self.timer.setInterval(POLL_MS)
         self.timer.timeout.connect(self.poll)
@@ -475,6 +476,7 @@ class RecordTab(QWidget):
 
     def _show_status(self, link: control.Link) -> None:
         s = link.status
+        self.names.update(zip(s.get("participants") or [], s.get("names") or [], strict=False))
         state = s.get("state", "starting")
         texts = {
             "starting": self.tr("Starting …"),
@@ -615,7 +617,8 @@ class RecordTab(QWidget):
         for c in event.get("checks", []):
             r = self.check_table.rowCount()
             self.check_table.insertRow(r)
-            self.check_table.setItem(r, 0, QTableWidgetItem(str(c.get("participant", ""))))
+            pid = str(c.get("participant", ""))
+            self.check_table.setItem(r, 0, QTableWidgetItem(self.names.get(pid, pid)))
             verdict = QTableWidgetItem(verdicts.get(c.get("verdict", ""), c.get("verdict", "")))
             verdict.setForeground(QColor(colours.get(c.get("verdict", ""), self.tokens.text)))
             self.check_table.setItem(r, 1, verdict)
