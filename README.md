@@ -53,6 +53,10 @@ uv run sessionscribe record verify --session recordings/2026-11-05
 uv run sessionscribe transcribe --session recordings/2026-11-05 -l hu
 ```
 
+A one-page Hungarian checklist for a session day (mic check, alarms, what to do when
+something fails, `verify`, cutting a triage clip) is in
+[docs/SESSION_CHECKLIST_HU.md](docs/SESSION_CHECKLIST_HU.md).
+
 `record start` begins with a guided mic check (each participant speaks a few seconds);
 its turns are saved for guided coupling. After a crash: `record recover --session ...`.
 

@@ -157,7 +157,9 @@ def test_disk_checks(tmp_path, monkeypatch):
 
 def test_idle_channel_warning(tmp_path, monkeypatch):
     monkeypatch.setattr(rec, "NOISE_LEARN_S", 2)
-    cfg = config(tmp_path, idle_warn_s=3)
+    # the whole 8 s fit in the buffer: the fake stream runs ~20x real time, and a slow CI
+    # writer must not drop seconds the idle logic counts
+    cfg = config(tmp_path, idle_warn_s=3, buffer_s=10.0)
     # gm and anna take turns each second; bela (channel 5) only speaks in the first one
 
     def amps(b):
@@ -165,6 +167,7 @@ def test_idle_channel_warning(tmp_path, monkeypatch):
         return [0.3 * (second % 2), 0.3 * (1 - second % 2), 0.3 if second == 0 else 0.0]
 
     _, m, _ = record(cfg, FakeOpener([Scenario(blocks=800, amps_fn=amps)]))
+    assert m.gaps == []
     idle = [a for a in m.alarms if a.kind == "idle_channel"]
     assert [a.channel for a in idle] == [5]
 
