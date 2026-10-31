@@ -261,3 +261,14 @@ def test_every_advanced_setting_has_a_title_and_its_toml_key(qtbot, tmp_path):
         lbl.text() for lbl in w.settings_tab.findChildren(QLabel) if lbl.property("caption") is True
     }
     assert "model.compute_type" in captions and len(captions) == len(titles)
+
+
+def test_tooltips_are_the_core_descriptions_and_go_through_tr(qtbot, tmp_path):
+    from sessionscribe.gui.models.settings_form import field_specs
+
+    w, _ = window(qtbot, tmp_path)
+    tips = w.settings_tab.field_tips()
+    described = {s.path: s.description for s in field_specs() if s.description}
+    assert tips == described  # English source = core.config description, nothing missing
+    editor = w.settings_tab.editors["model.compute_type"]
+    assert editor.control.toolTip() == tips["model.compute_type"]
