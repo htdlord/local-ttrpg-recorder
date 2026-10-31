@@ -58,7 +58,7 @@ Added beyond the review:
 - **Channel selection:** `--channels` takes 1-based numbers (`1-8`, `1,3,5-6`). On ASIO it is implemented with `AsioSettings(channel_selectors=…)`; on other host APIs the stream opens channels `1..max(selection)` and the callback copies the selected columns into the ring buffer without allocating (`np.take(..., out=, mode="clip")`).
 - **WASAPI:** the UMC1820 appears as several stereo-pair / single-channel devices, but also as an 8-channel `IN 01-08` endpoint, which opens 8 channels at 48 kHz (verified on the reference machine). **The M0 WASAPI acceptance criterion is therefore the full criterion** (30 min, 8 ch, PASS as above), the same as ASIO. Independently, `doctor` and `record-probe` must say clearly when a device cannot open N channels (device name, host API, available vs. requested, hint to use ASIO).
 - **Device auto-selection (probe/doctor only):** without `--audio-device`, the default input of the host API is used if it has enough channels, otherwise the first device that has. The chosen device, its index, host API and whether it was auto-selected are shown prominently before recording starts and in the report/JSON. The M5 recorder must not auto-select (SPEC §8.1).
-- **CUDA extra stays** although the reference machine works without it (system CUDA 12.8 + cuDNN 9.27 on PATH; ctranslate2 wheel ships `cudnn64_9.dll`). M6 task: verify on a clean environment without system CUDA in PATH that the extra alone is sufficient (SPEC §13).
+- **CUDA extra stays** although the reference machine works without it (system CUDA 12.8 + cuDNN 9.27 on PATH; ctranslate2 wheel ships `cudnn64_9.dll`). M6 task: verify on a clean environment without system CUDA in PATH that the extra alone is sufficient (SPEC §13). **Done 2026-10-31:** it is (see "M6 release preparation").
 - **CI triggers:** `push` only on `main`; every other branch is tested via `pull_request`; concurrency group per ref with `cancel-in-progress: true`.
 - **Known upstream warning:** sounddevice 0.5.6 sets `ndarray.shape`, deprecated in numpy 2.5; filtered in the pytest config by message and module only.
 
@@ -601,3 +601,30 @@ Owner requirement: no stdout/stdin pipe between the GUI and the recorder; the re
 - **`verify`** now says "no readable audio … kept as .partial" for a segment opened just before a kill, instead of "missing"; it is still reported (up to ~1 s may be lost in a crash).
 - **Advanced settings** show a translated name and, below it, the TOML key in small muted monospace (owner request), so the form still matches session files and the CLI. Tooltips (field descriptions) stay English for now.
 - **Tests:** control files without processes (rotation, partial lines, commands, lock, probe, concurrent appends); the recorder process with a fake device at about real time (status/events/stop, GUI killed while recording + reconnect, mic check pass and fail, second recorder refused, killed recorder recoverable); the Record tab end to end (devices, meters, stop → Session tab, mic-check prompt and result, close → reconnect, crash → Recover).
+
+## 2026-10-31 – M6 release preparation
+
+Owner decisions:
+
+- **Install channel:** clone + `uv sync --locked --extra gui --extra cuda` from a release tag; GitHub releases, no PyPI.
+- **Linux:** covered by CI only (clean Ubuntu runner, CPU). Linux with a GPU or an audio interface is "expected" in `docs/SUPPORTED.md`.
+- **One-dir build:** skipped for now and moved to SPEC §14. Blocker noted for later: the recorder, the device list and the inference check start `sys.executable -m …`, which is the frozen app itself in a build; the spawn-based ASR worker would need `freeze_support()`.
+- **v0.1.0** only after the first real session and clip02 have confirmed the defaults; the gate and steps are in `docs/RELEASING.md`.
+- **README screenshots** come from a demo session, never from real recordings (owner request).
+
+Implementation:
+
+- **Clean-environment CUDA check** (`scripts/clean_env_check.py`, `gpu`/`slow` test): a fresh venv from `uv.lock`, with the system CUDA 12.8 and cuDNN 9.27 of the reference machine hidden from the environment (7 PATH entries and variables). Result on the reference machine:
+
+  | | `cuda` extra | without it (control) |
+  |---|---|---|
+  | cuBLAS (`cublas64_12`, `cublasLt64_12`) | pip | not found |
+  | cuDNN 9 main library | pip | ctranslate2 wheel |
+  | cuDNN sub-libraries (graph, ops, cnn) | pip | not found |
+  | `doctor` real CUDA inference (tiny, float16) | OK | FAIL (`cublas64_12.dll` not found) |
+
+  So the extra is both needed and sufficient; the ctranslate2 wheel alone brings only `cudnn64_9.dll`.
+- **Fresh-install CI** (`.github/workflows/install.yml`): Windows and Ubuntu, no uv cache, the INSTALL.md steps, `doctor` on CPU with a real tiny-model inference, the GUI offscreen, and a synthetic two-track session through `session init` + `transcribe`. Weekly, on `v*` tags, by hand, and on PRs that touch the install inputs.
+- **Third-party notices** generated from the installed environment with `importlib.metadata` (no new dependency): 50 packages with the `gui` and `cuda` extras. Licence texts are deduplicated; texts over 20 KB (onnxruntime's bundled notices, 339 KB) are referenced instead of copied. A fast test checks that every dependency and extra in `pyproject.toml` is listed. Shown from the GUI's new About dialog.
+- **Demo session** (`sessionscribe demo`): four LibriVox volunteers from Short Story Collection Vol. 014 (public domain; authors died 1817–1912, so the texts are public domain in the EU too) as fictional players. Only the first 1.5 MB of each MP3 is fetched (HTTP Range, pinned SHA-256); archive.org returned sporadic 500s, so downloads retry 5xx and network errors. The audio is not committed.
+  - **Bleed simulation:** clean copies at −19…−30 dB over a −66 dBFS floor were transcribed almost word for word on every track (most segments flagged `low_ownership`, few suppressed), which is not what lavaliers give. Copies are now low-passed (~3 kHz) with a short room tail, the coupling is −27…−38 dB and the room tone −52 dBFS (pinkish). Result with the defaults: 17 segments, 2 suppressed, the mic-check turns attributed correctly, a few flagged Whisper fillers ("Thank you.") on near-silence kept for review. Not a benchmark: the voices are read text, the bleed is synthetic.

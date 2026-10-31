@@ -1,0 +1,74 @@
+name: Install
+
+# A fresh install exactly as docs/INSTALL.md describes it, on clean runners (no uv cache).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/install.yml
+      - docs/INSTALL.md
+      - pyproject.toml
+      - uv.lock
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
+      - name: System packages (Linux, see INSTALL.md)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libgl1
+      - name: Install
+        run: uv sync --locked --extra gui --extra cuda
+      - run: uv run sessionscribe --version
+      - name: System check (CPU, real tiny-model inference)
+        run: uv run sessionscribe doctor --device cpu --no-audio
+      - name: Desktop app starts
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          uv run python - <<'EOF'
+          from PySide6.QtWidgets import QApplication
+          from sessionscribe.gui.main_window import MainWindow
+          app = QApplication([])
+          window = MainWindow()
+          window.show()
+          app.processEvents()
+          window.close()
+          print("desktop app ok")
+          EOF
+      - name: Transcribe a synthetic two-track session
+        run: |
+          uv run python - <<'EOF'
+          from pathlib import Path
+          import numpy as np
+          import soundfile as sf
+          folder = Path("smoke")
+          folder.mkdir()
+          rate = 48000
+          t = np.arange(10 * rate) / rate
+          for i, name in enumerate(["gm", "anna"]):
+              x = 0.1 * np.sin(2 * np.pi * (180 + 60 * i) * t) * ((t % 2) < 1)
+              sf.write(str(folder / f"{name}.flac"), x.astype(np.float32), rate, subtype="PCM_24")
+          EOF
+          uv run sessionscribe session init smoke/
+          uv run sessionscribe transcribe --session smoke --model tiny --device cpu -l en --formats json,txt
+          test -s smoke/output/smoke.json

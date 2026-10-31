@@ -1,6 +1,7 @@
 # SessionScribe
 
-> Working title. Early development – nothing usable yet.
+> Pre-release (0.x). Works end to end on the reference machine; defaults may still change
+> before 0.1.0.
 
 Local, multi-track speech-to-text built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 Designed for tabletop RPG sessions recorded with one lavalier mic per participant
@@ -11,108 +12,65 @@ timestamped transcript (txt, srt, vtt, json, md).
 - Runs fully offline after models are downloaded; nothing is sent to the cloud.
 - Windows 10/11 and Linux; NVIDIA GPU (CUDA) recommended, CPU fallback.
 - Hungarian and English are first-class; any Whisper language works.
+- Records the session too: one multi-channel stream, guided mic check, alarms, crash-safe
+  segmented files.
 - Guiding principle: losing real speech is worse than showing a duplicate. Filters
   keep and flag when uncertain, and every removal is recorded with a reason.
 
-See [docs/SPEC.md](docs/SPEC.md) for the specification and
-[docs/DECISIONS.md](docs/DECISIONS.md) for the decision log.
+![Result tab: merged transcript of the demo session, flags and playback](docs/img/result.png)
 
-## Development
+## Magyar összefoglaló
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+.
+A SessionScribe helyben futó, többsávos beszédfelismerő asztali szerepjáték-sessionökhöz.
+Mindenkinek saját csiptetős mikrofonja van, a program sávonként ír át (faster-whisper),
+kiszűri az áthallást, és egyetlen, beszélőnként címkézett, időbélyeges leiratot készít.
+A modellek letöltése után teljesen offline működik; magyarul és angolul egyaránt jól.
 
-```bash
-uv sync                      # add --extra cuda for pip-installed cuBLAS/cuDNN 9
-uv run pre-commit install
-uv run ruff check . && uv run ruff format .
-uv run pytest -m "not gpu and not slow and not audio_hw"   # fast suite (= CI)
-uv run pytest -m "gpu or slow or audio_hw"                 # local: GPU, real model, audio interface
-```
+1. **Telepítés:** Git és [uv](https://docs.astral.sh/uv/) kell, aztán
+   `git clone https://github.com/htdlord/sessionscribe.git`, `cd sessionscribe`,
+   `uv sync --locked --extra gui --extra cuda`, végül `uv run sessionscribe doctor`.
+   Részletek: [docs/INSTALL.md](docs/INSTALL.md) (angolul).
+2. **Kipróbálás felvétel nélkül:** `uv run sessionscribe demo`, majd
+   `uv run sessionscribe transcribe --session demo` (kitalált szereplők, közkincs
+   LibriVox-hangok; [docs/DEMO.md](docs/DEMO.md)).
+3. **Felvétel → átírás → áttekintés:** a `uv run sessionscribe-gui` asztali alkalmazás
+   Felvétel, Session, Beállítások, Futtatás és Eredmény fülein, vagy parancssorból (lent).
+   A felület magyarul is elérhető (*Nézet → Nyelv*).
+4. **Játéknapon:** [docs/SESSION_CHECKLIST_HU.md](docs/SESSION_CHECKLIST_HU.md) – rig,
+   mikrofonpróba, riasztások, teendők hiba esetén, `record verify`.
 
-Hardware checks:
+A résztvevők hangja személyes adat: aki felvételt készít, annak a felelőssége a
+résztvevők tájékoztatása és – ahol szükséges – a hozzájárulásuk beszerzése.
 
-```bash
-uv run sessionscribe doctor                                   # versions, CUDA, real inference, audio
-uv run sessionscribe doctor --host-api asio --channels 1-8    # also opens an 8-channel ASIO stream
-uv run sessionscribe record-probe --host-api asio --channels 1-8 --minutes 30
-```
-
-`record-probe` writes one 24-bit FLAC per channel to `work/probe/<timestamp>/` (use
-`--no-write` to only count) and reports frame counts, overflows, timestamp continuity,
-clock deviation and per-channel peak/RMS levels.
-
-Record a session (the device is always named; save it once in a rig file):
+## Install
 
 ```bash
-uv run sessionscribe record devices                                   # names, host APIs, channels
-uv run sessionscribe record rig save rig.toml --device "UMC ASIO Driver" --host-api asio     --channels 1-8 --names gm,anna,bela,... --labels "Mesélő,Anna,Béla,..."
-uv run sessionscribe record meters --rig rig.toml                      # identify channels
-uv run sessionscribe record check --rig rig.toml                       # mic check with alarms
-uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05   # Ctrl+C stops
-uv run sessionscribe record verify --session recordings/2026-11-05
-uv run sessionscribe transcribe --session recordings/2026-11-05 -l hu
+git clone https://github.com/htdlord/sessionscribe.git
+cd sessionscribe
+uv sync --locked --extra gui --extra cuda   # leave out cuda without an NVIDIA GPU
+uv run sessionscribe doctor                 # versions, CUDA, a real short inference, audio
 ```
 
-A one-page Hungarian checklist for a session day (mic check, alarms, what to do when
-something fails, `verify`, cutting a triage clip) is in
-[docs/SESSION_CHECKLIST_HU.md](docs/SESSION_CHECKLIST_HU.md).
+No CUDA Toolkit or cuDNN install is needed; the `cuda` extra brings them.
+[docs/INSTALL.md](docs/INSTALL.md) covers prerequisites, audio interfaces, updating and
+troubleshooting; [docs/SUPPORTED.md](docs/SUPPORTED.md) lists what has been tested.
 
-`record start` begins with a guided mic check (each participant speaks a few seconds);
-its turns are saved for guided coupling. After a crash: `record recover --session ...`.
+## Quick start
 
-Transcribe a session (one file or segment folder per participant):
+Try it on the demo session (four fictional players, public-domain voices, simulated bleed):
 
 ```bash
-uv run sessionscribe session init recordings/2026-10-29/      # writes session.toml; edit names/offsets
-uv run sessionscribe transcribe --session recordings/2026-10-29 -l hu --formats json,txt,srt,vtt,md
-uv run sessionscribe export --session recordings/2026-10-29   # after renaming / offsets: no ASR
-uv run sessionscribe clean --session recordings/2026-10-29    # delete the work folder (cache)
+uv run sessionscribe demo
+uv run sessionscribe transcribe --session demo     # -> demo/output/
 ```
-
-Completed chunks are cached in `<session>/work/` (it contains transcript text), so an
-interrupted run resumes and renaming or moving a participant only re-exports.
-
-Transcribe one file and inspect settings:
-
-```bash
-uv run sessionscribe transcribe track.flac --language hu --out output/   # json + txt
-uv run sessionscribe transcribe track.flac --language hu --mode fast     # batched pipeline
-uv run sessionscribe config show --preset fast --set decoding.beam_size=3
-uv run sessionscribe config init my-settings.toml
-uv run sessionscribe config validate my-settings.toml
-uv run sessionscribe presets list
-```
-
-`quality` mode (the default) uses `WhisperModel.transcribe()` with temperature fallback.
-`fast` mode uses the batched pipeline, which ignores some options; the CLI warns when a
-setting you chose has no effect in the selected mode.
-
-Benchmarks run against local reference clips, which are personal data and git-ignored.
-[docs/REFERENCE_GUIDE.md](docs/REFERENCE_GUIDE.md) describes how to prepare a reference.
-
-```bash
-uv run sessionscribe bench run --refs bench/refs --matrix m1   # writes work/bench/<run>/results.md
-uv run sessionscribe bench score work/bench/<run>              # re-score without ASR
-uv run sessionscribe bench ref triage bench/refs/clip01         # label segments by ear (M3)
-uv run sessionscribe bench triage score bench/refs/clip01 out.json
-uv run sessionscribe bench bleed bench/refs/clip01               # off vs post/pre on the triage
-```
-
-Bleed handling defaults to `post` (attribution after ASR, never re-transcribes); the
-`strong` preset uses `pre` mode. A `[mic_check]` table in `session.toml` (participant →
-time range where only they speak) enables `bleed.coupling = "guided"`.
-
-CUDA: ctranslate2 needs CUDA 12 cuBLAS and cuDNN 9. Either install the optional extra
-(`uv sync --extra cuda`) or a system CUDA/cuDNN; `doctor` shows where each library was found.
 
 ### Desktop app
 
-The GUI is an optional extra (PySide6, LGPLv3, dynamically linked):
-
 ```bash
-uv sync --extra gui          # combine with --extra cuda as needed
 uv run sessionscribe-gui
 ```
+
+![Record tab: device, rig, mic check and meters](docs/img/record.png)
 
 Tabs: **Session** (create from a folder or open `session.toml`, edit participants),
 **Record** (device and rig, guided mic check, meters, alarms; the recording runs in a
@@ -121,24 +79,62 @@ separate process, so closing the window does not stop it and reopening reconnect
 the chosen ASR mode are disabled), **Run** (progress, ETA, cancel; running again resumes
 from the cache; export only), **Result** (filters, playback from the original track,
 reassigning a segment to another participant without re-ASR). The interface is English
-or Hungarian and follows the system light/dark theme unless set under *View*. Manual
-reassignment also works from the CLI:
+or Hungarian and follows the system light/dark theme unless set under *View*.
+
+### Record a session
+
+The device is always named explicitly; save it once in a rig file:
 
 ```bash
-uv run sessionscribe reassign --session recordings/2026-10-29 --segment p2-c004-0003 --to p5
-uv run sessionscribe reassign --session recordings/2026-10-29 --segment p2-c004-0003 --undo
+uv run sessionscribe record devices                                   # names, host APIs, channels
+uv run sessionscribe record rig save rig.toml --device "UMC ASIO Driver" --host-api asio --channels 1-8 --names gm,anna,bela,... --labels "Mesélő,Anna,Béla,..."
+uv run sessionscribe record meters --rig rig.toml                      # identify channels
+uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05   # mic check first; Ctrl+C stops
+uv run sessionscribe record verify --session recordings/2026-11-05
 ```
 
-Translations: after changing GUI strings run
-`pyside6-lupdate <gui .py files> -ts src/sessionscribe/gui/i18n/sessionscribe_hu.ts`,
-translate, then `pyside6-lrelease` to the `.qm` next to it (a test checks completeness).
+After a crash: `record recover --session ...`. The mic check's turns are saved for guided
+bleed coupling.
+
+### Transcribe
+
+```bash
+uv run sessionscribe session init recordings/2026-10-29/      # for files you recorded elsewhere
+uv run sessionscribe transcribe --session recordings/2026-10-29 -l hu --formats json,txt,srt,vtt,md
+uv run sessionscribe export --session recordings/2026-10-29   # after renaming / offsets: no ASR
+uv run sessionscribe reassign --session recordings/2026-10-29 --segment p2-c004-0003 --to p5
+uv run sessionscribe clean --session recordings/2026-10-29    # delete the work folder (cache)
+```
+
+Completed chunks are cached in `<session>/work/` (it contains transcript text), so an
+interrupted run resumes and renaming or moving a participant only re-exports.
+
+`quality` mode (the default) uses `WhisperModel.transcribe()` with temperature fallback;
+`fast` mode uses the batched pipeline, which ignores some options (the CLI warns). Bleed
+handling defaults to `post` (attribution after ASR, never re-transcribes); the `strong`
+preset uses `pre` mode. Settings: `sessionscribe config show|init|validate`,
+`sessionscribe presets list`; every command has `--help`.
+
+## Documentation
+
+- [docs/INSTALL.md](docs/INSTALL.md) – installation on Windows and Linux
+- [docs/SUPPORTED.md](docs/SUPPORTED.md) – tested and expected configurations
+- [docs/DEMO.md](docs/DEMO.md) – the demo session and its sources
+- [docs/SESSION_CHECKLIST_HU.md](docs/SESSION_CHECKLIST_HU.md) – session-day checklist (Hungarian)
+- [docs/SPEC.md](docs/SPEC.md), [docs/DECISIONS.md](docs/DECISIONS.md) – specification and decision log
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) – tests, benchmarks, translations, release checks
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## Privacy
 
 Participants' voices are personal data. Whoever records a session is responsible
-for informing participants and obtaining consent where required.
+for informing participants and obtaining consent where required. Logs contain no
+transcript text by default; the cache in `<session>/work/` does (`sessionscribe clean`).
 
 ## Licence
 
-MIT – see [LICENSE](LICENSE). Third-party components (e.g. PySide6, LGPLv3) keep
-their own licences.
+MIT – see [LICENSE](LICENSE). Third-party packages keep their own licences, listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (PySide6/Qt: LGPLv3, installed as
+replaceable libraries; NVIDIA libraries: installed from PyPI under NVIDIA's terms).
+Whisper models are downloaded on first use; the demo voices are public-domain LibriVox
+recordings ([docs/DEMO.md](docs/DEMO.md)).

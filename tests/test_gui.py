@@ -272,3 +272,21 @@ def test_tooltips_are_the_core_descriptions_and_go_through_tr(qtbot, tmp_path):
     assert tips == described  # English source = core.config description, nothing missing
     editor = w.settings_tab.editors["model.compute_type"]
     assert editor.control.toolTip() == tips["model.compute_type"]
+
+
+def test_about_shows_versions_and_opens_the_local_notices(qtbot, tmp_path):
+    from sessionscribe import __version__
+
+    w, _ = window(qtbot, tmp_path)
+    dialog = w.about()
+    qtbot.addWidget(dialog)
+    assert "ctranslate2" in dialog.versions.text() and "PySide6" in dialog.versions.text()
+    assert __version__ in dialog.windowTitle() or any(
+        __version__ in lbl.text() for lbl in dialog.findChildren(type(dialog.versions))
+    )
+    opened = []
+    dialog.open_url = lambda url: opened.append(url) or True
+    dialog.notices_btn.click()
+    assert opened and opened[0].isLocalFile()
+    assert opened[0].toLocalFile().endswith("THIRD_PARTY_NOTICES.md")
+    dialog.accept()
