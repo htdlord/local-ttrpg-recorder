@@ -33,7 +33,7 @@ from ttrpg_recorder.gui.tabs.settings_tab import SettingsTab
 from ttrpg_recorder.gui.widgets import button, label
 from ttrpg_recorder.gui.workers import DoctorWorker, ProcessWorker, start
 
-ORG = "SessionScribe"
+ORG = "Local TTRPG Recorder"
 MAX_RECENT = 8
 NOTICES = "THIRD_PARTY_NOTICES.md"
 NOTICES_URL = "https://github.com/htdlord/sessionscribe/blob/main/" + NOTICES

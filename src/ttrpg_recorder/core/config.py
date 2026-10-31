@@ -9,7 +9,9 @@ runtime by :func:`resolve_runtime`, so a config file stays loadable on any machi
 
 from __future__ import annotations
 
+import logging
 import os
+import shutil
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
@@ -21,6 +23,8 @@ import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ttrpg_recorder.core.cuda_libs import import_ctranslate2
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 2
 
@@ -419,12 +423,32 @@ def write_settings(settings: Settings, path: Path) -> None:
     atomic_write_text(path, settings_to_toml(settings))
 
 
-def user_config_dir() -> Path:
+APP_DIR = "local-ttrpg-recorder"
+LEGACY_APP_DIR = "sessionscribe"  # the project's name until 2026-10-31
+
+
+def _config_base() -> Path:
     if sys.platform == "win32":
-        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(base) / "sessionscribe"
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "sessionscribe"
+        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def user_config_dir() -> Path:
+    """Per-user folder (presets). A folder from before the rename is copied once and kept
+    (the old command aliases and a downgrade still use it); if the copy fails, it is read
+    in place."""
+    base = _config_base()
+    new, old = base / APP_DIR, base / LEGACY_APP_DIR
+    if new.exists() or not old.is_dir():
+        return new
+    try:
+        shutil.copytree(old, new)
+    except OSError as exc:
+        shutil.rmtree(new, ignore_errors=True)  # no half-copied folder
+        logger.warning("could not copy %s to %s (%s); using the old folder", old, new, exc)
+        return old
+    logger.info("copied the settings folder %s to %s (the old one is kept)", old, new)
+    return new
 
 
 # --- presets ------------------------------------------------------------------------------

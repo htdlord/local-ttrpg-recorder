@@ -17,11 +17,13 @@ def main(deprecated_alias: str | None = None) -> int:
         return 1
     from ttrpg_recorder.gui import i18n
     from ttrpg_recorder.gui.main_window import ORG, MainWindow
+    from ttrpg_recorder.gui.prefs import LEGACY_ORG, migrate_prefs
 
     app = QApplication(sys.argv)
     app.setApplicationName("SessionScribe")
     app.setOrganizationName(ORG)
     prefs = QSettings(ORG, ORG)
+    migrate_prefs(prefs, QSettings(LEGACY_ORG, LEGACY_ORG))
     i18n.install(app, str(prefs.value("language", "system")))
     window = MainWindow(settings=prefs)
     window.show()
