@@ -25,9 +25,9 @@ def test_system_cuda_locations_are_hidden():
     env = {
         "PATH": sep.join(
             [
-                r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin",
-                r"C:\Windows\System32",
-                r"C:\Program Files\NVIDIA\CUDNN\v9.27\bin",
+                "/opt/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin",
+                "/usr/bin",
+                "/opt/NVIDIA/CUDNN/v9.27/bin",
             ]
         ),
         "CUDA_PATH": "x",
@@ -35,7 +35,7 @@ def test_system_cuda_locations_are_hidden():
         "HOME": "h",
     }
     out, removed = script.clean_environment(env)
-    assert out["PATH"] == r"C:\Windows\System32" and "CUDA_PATH" not in out
+    assert out["PATH"] == "/usr/bin" and "CUDA_PATH" not in out
     assert out["HOME"] == "h" and len(removed) == 4
 
 
