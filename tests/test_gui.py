@@ -247,3 +247,17 @@ def test_closing_during_a_run_does_not_hang(qtbot, tmp_path):
     t0 = time.monotonic()
     w.close()  # cancels; completed chunks stay cached
     assert time.monotonic() - t0 < 10 and workers.running() == 0
+
+
+def test_every_advanced_setting_has_a_title_and_its_toml_key(qtbot, tmp_path):
+    from PySide6.QtWidgets import QLabel
+
+    from sessionscribe.gui.models.settings_form import field_specs
+
+    w, _ = window(qtbot, tmp_path)
+    titles = w.settings_tab.field_titles()
+    assert set(titles) == {s.path for s in field_specs()}
+    captions = {
+        lbl.text() for lbl in w.settings_tab.findChildren(QLabel) if lbl.property("caption") is True
+    }
+    assert "model.compute_type" in captions and len(captions) == len(titles)

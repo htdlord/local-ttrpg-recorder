@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,6 +31,20 @@ from sessionscribe.gui.widgets import button, label
 
 def _title(name: str) -> str:
     return name.replace("_", " ").capitalize()
+
+
+def _field_title(title: str, key: str) -> QWidget:
+    """The translated name with its TOML key underneath (small, muted)."""
+    w = QWidget()
+    layout = QVBoxLayout(w)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    layout.addWidget(QLabel(title))
+    caption = QLabel(key)
+    caption.setProperty("caption", True)
+    caption.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    layout.addWidget(caption)
+    return w
 
 
 class FieldEditor(QWidget):
@@ -195,8 +210,12 @@ class SettingsTab(QWidget):
             page = QWidget()
             form = QFormLayout(page)
             form.setVerticalSpacing(8)
+            titles = self.field_titles()
             for spec in specs:
-                form.addRow(_title(spec.name), self._editor(spec, key=spec.path))
+                form.addRow(
+                    _field_title(titles.get(spec.path, _title(spec.name)), spec.path),
+                    self._editor(spec, key=spec.path),
+                )
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setWidget(page)
@@ -218,6 +237,84 @@ class SettingsTab(QWidget):
         editor = FieldEditor(spec, self._changed)
         self.editors[key] = editor
         return editor
+
+    def field_titles(self) -> dict[str, str]:
+        """Translated names of the settings (the TOML key is shown under each)."""
+        return {
+            "model.id": self.tr("Model"),
+            "model.revision": self.tr("Model revision"),
+            "model.device": self.tr("Device"),
+            "model.compute_type": self.tr("Compute type"),
+            "model.cpu_threads": self.tr("CPU threads"),
+            "model.num_workers": self.tr("Parallel workers"),
+            "model.model_dir": self.tr("Model folder"),
+            "model.offline": self.tr("Offline only"),
+            "asr.mode": self.tr("ASR mode"),
+            "asr.batch_size": self.tr("Batch size"),
+            "asr.oom_fallback": self.tr("Smaller batches on GPU out-of-memory"),
+            "asr.chunk_owned_s": self.tr("Chunk length (s)"),
+            "asr.chunk_context_s": self.tr("Chunk context (s)"),
+            "asr.chunk_boundary_search_s": self.tr("Chunk boundary search (s)"),
+            "asr.refill_holes": self.tr("Re-transcribe speech without words"),
+            "asr.refill_min_s": self.tr("Shortest refill (s)"),
+            "asr.refill_pad_s": self.tr("Refill padding (s)"),
+            "decoding.language": self.tr("Language"),
+            "decoding.task": self.tr("Task"),
+            "decoding.beam_size": self.tr("Beam size"),
+            "decoding.best_of": self.tr("Best of"),
+            "decoding.temperature": self.tr("Temperatures"),
+            "decoding.condition_on_previous_text": self.tr("Condition on previous text"),
+            "decoding.no_speech_threshold": self.tr("No-speech threshold"),
+            "decoding.log_prob_threshold": self.tr("Log probability threshold"),
+            "decoding.compression_ratio_threshold": self.tr("Compression ratio threshold"),
+            "decoding.hallucination_silence_threshold": self.tr(
+                "Hallucination silence threshold (s)"
+            ),
+            "decoding.word_timestamps": self.tr("Word timestamps"),
+            "vocabulary.initial_prompt": self.tr("Initial prompt"),
+            "vocabulary.hotwords": self.tr("Hotwords"),
+            "vad.enabled": self.tr("Voice activity detection"),
+            "vad.threshold": self.tr("Speech threshold"),
+            "vad.min_speech_duration_ms": self.tr("Shortest speech (ms)"),
+            "vad.min_silence_duration_ms": self.tr("Shortest silence (ms)"),
+            "vad.speech_pad_ms": self.tr("Speech padding (ms)"),
+            "vad.max_speech_duration_s": self.tr("Longest speech (s)"),
+            "bleed.mode": self.tr("Bleed handling"),
+            "bleed.coupling": self.tr("Coupling"),
+            "bleed.ownership_margin_db": self.tr("Ownership margin (dB)"),
+            "bleed.pre_attenuation_db": self.tr("Pre-ASR attenuation (dB)"),
+            "bleed.mute": self.tr("Mute instead of attenuate"),
+            "bleed.frame_ms": self.tr("Frame length (ms)"),
+            "bleed.hold_ms": self.tr("Ownership hold (ms)"),
+            "bleed.release_ms": self.tr("Release (ms)"),
+            "bleed.floor_above_noise_db": self.tr("Floor above noise (dB)"),
+            "bleed.suppress_below": self.tr("Suppress below ownership"),
+            "bleed.low_ownership_below": self.tr("Flag below ownership"),
+            "bleed.text_similarity": self.tr("Text similarity (%)"),
+            "bleed.silent_mic_range_db": self.tr("Silent mic range (dB)"),
+            "bleed.coupling_min_frames": self.tr("Coupling: minimum frames"),
+            "bleed.coupling_default_db": self.tr("Coupling: default (dB)"),
+            "dedup.enabled": self.tr("Remove duplicates"),
+            "dedup.similarity": self.tr("Text similarity (%)"),
+            "dedup.max_time_gap_s": self.tr("Largest time gap (s)"),
+            "dedup.min_words": self.tr("Fewest words"),
+            "dedup.mark_overlaps": self.tr("Mark overlaps"),
+            "quality.enabled": self.tr("Quality flags"),
+            "quality.low_logprob": self.tr("Low log probability"),
+            "quality.high_no_speech": self.tr("High no-speech probability"),
+            "quality.high_no_speech_logprob": self.tr("… with log probability below"),
+            "quality.high_compression": self.tr("High compression ratio"),
+            "quality.repeated_ngram": self.tr("Repeated n-gram length"),
+            "quality.repeated_ngram_times": self.tr("Repetitions that count as a loop"),
+            "quality.max_chars_per_s": self.tr("Most characters per second"),
+            "quality.min_vad_fraction": self.tr("Least VAD speech share"),
+            "output.formats": self.tr("Output formats"),
+            "output.timestamp_style": self.tr("Timestamps"),
+            "output.merge_same_speaker_gap_s": self.tr("Merge same speaker within (s)"),
+            "output.filename_template": self.tr("File name template"),
+            "output.output_dir": self.tr("Output folder"),
+            "output.work_dir": self.tr("Work folder"),
+        }
 
     def _changed(self, spec: sf.FieldSpec, value: Any) -> None:
         try:
