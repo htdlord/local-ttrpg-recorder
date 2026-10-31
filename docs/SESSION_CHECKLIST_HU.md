@@ -3,7 +3,7 @@
 Egy játéknap felvételéhez, egy többcsatornás hangkártyával és résztvevőnként egy csiptetős mikrofonnal. A példákban:
 - a session mappája `recordings/2026-11-05`;
 - a hangkártya ASIO-drivere `"Az interfész ASIO-drivere"` (a pontos nevet a `record devices` írja ki);
-- minden parancs a klónozott SessionScribe-mappából fut (lásd [INSTALL.md](INSTALL.md)).
+- minden parancs a klónozott Local TTRPG Recorder-mappából fut (lásd [INSTALL.md](INSTALL.md)).
 
 A felvételek és a rig-fájl személyes adatot tartalmaznak (hangok, nevek): ne oszd meg és ne commitold őket. A `recordings/` és a `rig.toml` ezért git-ignorált.
 
@@ -14,17 +14,17 @@ A felvételek és a rig-fájl személyes adatot tartalmaznak (hangok, nevek): ne
 - [ ] **Lemezhely:** a `record start` induláskor ellenőrzi, hogy a tervezett hossz (alapból 8 óra) tömörítetlen 24 bites hangja + 10% elfér-e; ha nem, el sem indul.
 - [ ] **Rig:** a `rig.toml` a bekötött csatornákkal és a résztvevőkkel. Ha a mai ülésrend vagy a résztvevők mások, mentsd újra:
   ```bash
-  uv run sessionscribe record devices
-  uv run sessionscribe record rig save rig.toml --device "Az interfész ASIO-drivere" --host-api asio --channels 1-4 --names gm,anna,bela,cili --labels "Mesélő,Anna,Béla,Cili"
+  uv run ttrpg record devices
+  uv run ttrpg record rig save rig.toml --device "Az interfész ASIO-drivere" --host-api asio --channels 1-4 --names gm,anna,bela,cili --labels "Mesélő,Anna,Béla,Cili"
   ```
 - [ ] **Mikrofonok:** mindegyik a helyén (a mellkas közepén, kb. 15–20 cm-re a szájtól), a kábelek nem feszülnek.
-- [ ] **Gyors szintpróba:** `uv run sessionscribe record meters --rig rig.toml`. Mindenki mondjon pár szót, és a saját csatornája mozduljon (Ctrl+C kilép).
+- [ ] **Gyors szintpróba:** `uv run ttrpg record meters --rig rig.toml`. Mindenki mondjon pár szót, és a saját csatornája mozduljon (Ctrl+C kilép).
 - [ ] **Tartalék felvétel:** egy telefon vagy kézi felvevő az asztal közepén, a mikrofonpróba előtt elindítva. Ha a gép vagy a hangkártya menet közben kiesik, ebből megvan a hang.
 
 ## 2. Indítás: mikrofonpróba és felvétel
 
 ```bash
-uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05
+uv run ttrpg record start --rig rig.toml --session recordings/2026-11-05
 ```
 
 A GUI-ban ugyanez: **Felvétel** fül, rig betöltése, session-mappa, **Felvétel indítása**.
@@ -53,12 +53,12 @@ A GUI-ban ugyanez: **Felvétel** fül, rig betöltése, session-mappa, **Felvét
   - Ha nem lehet megjavítani (pl. egy mikrofon ma nem működik), de így is indítanád: a `--force` kapcsolóval a FAIL ellenére folytatja (a GUI-ban: „Sikertelen mikrofonpróba esetén is folytassa”). A hibás csatorna attól még felvételre kerül; jegyezd fel, kinek nem ment.
 - **Megszakadt a hang (`device_lost`), és 1 percen belül nem jön `reconnected`:** Ctrl+C, ellenőrizd a kábelt és a hangkártyát, majd folytasd ugyanabba a mappába, próba nélkül:
   ```bash
-  uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05 --no-check
+  uv run ttrpg record start --rig rig.toml --session recordings/2026-11-05 --no-check
   ```
 - **Összeomlás, lefagyás, újraindult a gép:** előbb helyreállítás, csak utána folytatás. A GUI ilyenkor maga ajánlja fel a **Helyreállítás** gombot.
   ```bash
-  uv run sessionscribe record recover --session recordings/2026-11-05
-  uv run sessionscribe record start --rig rig.toml --session recordings/2026-11-05 --no-check
+  uv run ttrpg record recover --session recordings/2026-11-05
+  uv run ttrpg record start --rig rig.toml --session recordings/2026-11-05 --no-check
   ```
   A helyreállítás a félbemaradt fájlok olvasható részét menti, az eredetit `.partial` néven megtartja.
 - **Semmi nem segít:** a tartalék felvétel fut tovább. Írd fel, mikor (óra:perc) állt le a gépes felvétel, hogy később tudd, mi hiányzik.
@@ -68,7 +68,7 @@ A GUI-ban ugyanez: **Felvétel** fül, rig betöltése, session-mappa, **Felvét
 - [ ] **Leállítás:** Ctrl+C a felvevő terminálban (vagy **Leállítás** a GUI-ban), és várd meg, amíg kiírja: `[OK] stopped: … gap(s) …`.
 - [ ] **Ellenőrzés:**
   ```bash
-  uv run sessionscribe record verify --session recordings/2026-11-05
+  uv run ttrpg record verify --session recordings/2026-11-05
   ```
   Elvárt: `0 problem(s)`, és minden csatorna ugyanolyan hosszú. Ha van kimaradás, a `verify` megmondja, hol és mennyi.
 - [ ] **Tartalék felvétel:** mentsd el a session mappája mellé.
@@ -77,12 +77,12 @@ A GUI-ban ugyanez: **Felvétel** fül, rig betöltése, session-mappa, **Felvét
 
 - [ ] **Átírás** (a GUI-ban: Session megnyitása → **Futtatás**):
   ```bash
-  uv run sessionscribe transcribe --session recordings/2026-11-05 -l hu
+  uv run ttrpg transcribe --session recordings/2026-11-05 -l hu
   ```
   Megszakítás után ugyanez a parancs onnan folytatja, ahol abbahagyta.
 - [ ] **Áttekintés:** az **Eredmény** fülön szűrj a jelölt tételekre (Átnézendő, Átfedés, Kiszűrt, Lehetséges kimaradt beszéd). Egy szegmensre kattintva meghallgathatod az eredeti sávból, és jobb klikkel másik résztvevőhöz sorolhatod.
 - [ ] **Újraexport:** nevek, offsetek vagy átsorolás változása után nem kell újra átírni:
   ```bash
-  uv run sessionscribe export --session recordings/2026-11-05
+  uv run ttrpg export --session recordings/2026-11-05
   ```
-- [ ] **Takarítás:** ha már nincs szükség rá, a `work/` gyorsítótár (benne átiratszöveg) törölhető: `uv run sessionscribe clean --session recordings/2026-11-05`.
+- [ ] **Takarítás:** ha már nincs szükség rá, a `work/` gyorsítótár (benne átiratszöveg) törölhető: `uv run ttrpg clean --session recordings/2026-11-05`.

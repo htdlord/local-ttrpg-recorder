@@ -6,11 +6,11 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from sessionscribe.cli import app
-from sessionscribe.core.bench import triage as t
-from sessionscribe.triage_cli import AudioSource, run_labelling
 from tests.fakes import FakeFactory
 from tests.test_triage import IDENTITY, make_clip
+from ttrpg_recorder.cli import app
+from ttrpg_recorder.core.bench import triage as t
+from ttrpg_recorder.triage_cli import AudioSource, run_labelling
 
 runner = CliRunner()
 
@@ -131,7 +131,7 @@ def test_real_playback_of_a_short_tone():
 
     import numpy as np
 
-    from sessionscribe.triage_cli import Player
+    from ttrpg_recorder.triage_cli import Player
 
     player = Player()
     assert player.sd is not None

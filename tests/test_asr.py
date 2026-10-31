@@ -6,11 +6,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.events import ProgressEvent, SegmentEvent, WarningEvent
-from sessionscribe.core.exporters.single import Speaker, to_json, to_txt, write_outputs
-from sessionscribe.core.pipeline import asr
-from sessionscribe.core.pipeline.asr import (
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.events import ProgressEvent, SegmentEvent, WarningEvent
+from ttrpg_recorder.core.exporters.single import Speaker, to_json, to_txt, write_outputs
+from ttrpg_recorder.core.pipeline import asr
+from ttrpg_recorder.core.pipeline.asr import (
     AsrEngine,
     AsrError,
     Cancelled,
@@ -173,7 +173,7 @@ def test_fallback_can_be_switched_off():
     ("start", "expected"), [(None, (16, 8, 4, 2, 1)), (4, (4, 2, 1)), (6, (6, 3, 1)), (1, (1,))]
 )
 def test_batch_size_sequence(start, expected):
-    from sessionscribe.core.pipeline.asr import batch_sizes
+    from ttrpg_recorder.core.pipeline.asr import batch_sizes
 
     cli = {"asr": {"mode": "fast", "batch_size": start}} if start else {"asr": {"mode": "fast"}}
     assert batch_sizes(load_settings(cli=cli)) == expected

@@ -8,10 +8,10 @@ import textwrap
 import time
 from pathlib import Path
 
-from sessionscribe.core.audio import control
-from sessionscribe.core.audio.manifest import RigChannel, RigConfig, write_rig
-from sessionscribe.core.audio.recovery import recover, verify
-from sessionscribe.core.session import Session
+from ttrpg_recorder.core.audio import control
+from ttrpg_recorder.core.audio.manifest import RigChannel, RigConfig, write_rig
+from ttrpg_recorder.core.audio.recovery import recover, verify
+from ttrpg_recorder.core.session import Session
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,8 +36,8 @@ def rig(tmp_path) -> Path:
 
 def env(scenario="steady"):
     out = dict(os.environ)
-    out["SESSIONSCRIBE_TEST_OPENER"] = "tests.fake_stream:child_opener"
-    out["SESSIONSCRIBE_TEST_SCENARIO"] = scenario
+    out["TTRPG_RECORDER_TEST_OPENER"] = "tests.fake_stream:child_opener"
+    out["TTRPG_RECORDER_TEST_SCENARIO"] = scenario
     out["PYTHONPATH"] = str(ROOT)
     return out
 
@@ -126,7 +126,7 @@ def test_recording_goes_on_when_the_gui_dies_and_a_new_gui_reconnects(tmp_path):
                 f"""
                 import time
                 from pathlib import Path
-                from sessionscribe.core.audio import control
+                from ttrpg_recorder.core.audio import control
                 control.spawn_recorder(
                     Path({str(session)!r}),
                     ["--rig", {str(rig(tmp_path))!r}, "--hours", "0.1", "--no-check"],

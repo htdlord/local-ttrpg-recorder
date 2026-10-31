@@ -38,16 +38,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libgl1
       - name: Install
         run: uv sync --locked --extra gui --extra cuda
-      - run: uv run sessionscribe --version
+      - run: uv run ttrpg --version
+      - name: Deprecated alias still works and warns (until after v0.1.0)
+        run: |
+          uv run sessionscribe --version 2> alias.err
+          grep -q "deprecated" alias.err
       - name: System check (CPU, real tiny-model inference)
-        run: uv run sessionscribe doctor --device cpu --no-audio
+        run: uv run ttrpg doctor --device cpu --no-audio
       - name: Desktop app starts
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
           uv run python - <<'EOF'
           from PySide6.QtWidgets import QApplication
-          from sessionscribe.gui.main_window import MainWindow
+          from ttrpg_recorder.gui.main_window import MainWindow
           app = QApplication([])
           window = MainWindow()
           window.show()
@@ -69,6 +73,6 @@ jobs:
               x = 0.1 * np.sin(2 * np.pi * (180 + 60 * i) * t) * ((t % 2) < 1)
               sf.write(str(folder / f"{name}.flac"), x.astype(np.float32), rate, subtype="PCM_24")
           EOF
-          uv run sessionscribe session init smoke/
-          uv run sessionscribe transcribe --session smoke --model tiny --device cpu -l en --formats json,txt
+          uv run ttrpg session init smoke/
+          uv run ttrpg transcribe --session smoke --model tiny --device cpu -l en --formats json,txt
           test -s smoke/output/smoke.json

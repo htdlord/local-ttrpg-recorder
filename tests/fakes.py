@@ -10,14 +10,14 @@ from pathlib import Path
 
 import numpy as np
 
-from sessionscribe.core.pipeline.asr import (
+from ttrpg_recorder.core.pipeline.asr import (
     LoadedModel,
     Segment,
     SpeechInterval,
     TranscriptionResult,
     Word,
 )
-from sessionscribe.core.timeline import TIMELINE_RATE, WHISPER_RATE
+from ttrpg_recorder.core.timeline import TIMELINE_RATE, WHISPER_RATE
 
 FRAME = WHISPER_RATE // 50  # 20 ms
 ACTIVE_DB = -40.0
@@ -169,7 +169,7 @@ class OomFactory:
     sizes: list[int]
 
     def __call__(self, settings):
-        from sessionscribe.core.pipeline.asr import AsrEngine
+        from ttrpg_recorder.core.pipeline.asr import AsrEngine
 
         return AsrEngine(settings, object(), LOADED, lambda m: OomBatched(self.limit, self.sizes))
 

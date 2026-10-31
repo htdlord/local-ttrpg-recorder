@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.audio.track import VirtualTrack
-from sessionscribe.core.cache import Cache, make_key
-from sessionscribe.core.pipeline import features
-from sessionscribe.core.pipeline.features import (
+from ttrpg_recorder.core.audio.track import VirtualTrack
+from ttrpg_recorder.core.cache import Cache, make_key
+from ttrpg_recorder.core.pipeline import features
+from ttrpg_recorder.core.pipeline.features import (
     SILENCE_DB,
     envelope,
     frame_samples,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from sessionscribe.core.audio.probe import ProbeConfig, Verdict, run_probe
+from ttrpg_recorder.core.audio.probe import ProbeConfig, Verdict, run_probe
 
 
 @pytest.mark.audio_hw
@@ -12,18 +12,25 @@ def test_default_device_short_probe():
     assert report.verdict is not Verdict.FAIL, report.reasons
 
 
-def _rig():
-    """Real interface from the environment, e.g. SESSIONSCRIBE_TEST_DEVICE="UMC ASIO Driver",
-    SESSIONSCRIBE_TEST_HOST_API=asio, SESSIONSCRIBE_TEST_CHANNELS=1-8."""
+def _env(name, default=None):
+    """TTRPG_RECORDER_TEST_<name>, or the SESSIONSCRIBE_TEST_<name> used before the rename."""
     import os
 
-    device = os.environ.get("SESSIONSCRIBE_TEST_DEVICE")
-    host_api = os.environ.get("SESSIONSCRIBE_TEST_HOST_API")
+    return os.environ.get(f"TTRPG_RECORDER_TEST_{name}") or os.environ.get(
+        f"SESSIONSCRIBE_TEST_{name}", default
+    )
+
+
+def _rig():
+    """Real interface from the environment, e.g. TTRPG_RECORDER_TEST_DEVICE="UMC ASIO Driver",
+    TTRPG_RECORDER_TEST_HOST_API=asio, TTRPG_RECORDER_TEST_CHANNELS=1-8."""
+    device = _env("DEVICE")
+    host_api = _env("HOST_API")
     if not device or not host_api:
-        pytest.skip("set SESSIONSCRIBE_TEST_DEVICE and SESSIONSCRIBE_TEST_HOST_API")
+        pytest.skip("set TTRPG_RECORDER_TEST_DEVICE and TTRPG_RECORDER_TEST_HOST_API")
     import sys
 
-    from sessionscribe.core.audio import backend
+    from ttrpg_recorder.core.audio import backend
 
     if (
         "asio" in host_api.lower()
@@ -33,12 +40,12 @@ def _rig():
         pytest.skip(
             "sounddevice was loaded without ASIO earlier in this run; run with -k rig tests"
         )
-    from sessionscribe.core.audio.backend import parse_channel_spec
+    from ttrpg_recorder.core.audio.backend import parse_channel_spec
 
     return (
         device,
         host_api,
-        parse_channel_spec(os.environ.get("SESSIONSCRIBE_TEST_CHANNELS", "1-8")),
+        parse_channel_spec(_env("CHANNELS", "1-8")),
     )
 
 
@@ -46,9 +53,9 @@ def _rig():
 def test_two_minute_recording_verifies(tmp_path):
     import threading
 
-    from sessionscribe.core.audio.live import SoundDeviceOpener
-    from sessionscribe.core.audio.recorder import Recorder, RecorderConfig
-    from sessionscribe.core.audio.recovery import verify
+    from ttrpg_recorder.core.audio.live import SoundDeviceOpener
+    from ttrpg_recorder.core.audio.recorder import Recorder, RecorderConfig
+    from ttrpg_recorder.core.audio.recovery import verify
 
     device, host_api, channels = _rig()
     opener = SoundDeviceOpener(device, host_api, channels, 48_000, 480)
@@ -69,7 +76,7 @@ def test_two_minute_recording_verifies(tmp_path):
 
 @pytest.mark.audio_hw
 def test_meter_and_device_refresh():
-    from sessionscribe.core.audio.live import Meter, SoundDeviceOpener
+    from ttrpg_recorder.core.audio.live import Meter, SoundDeviceOpener
 
     device, host_api, channels = _rig()
     opener = SoundDeviceOpener(device, host_api, channels, 48_000, 480)

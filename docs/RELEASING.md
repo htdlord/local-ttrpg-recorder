@@ -32,7 +32,7 @@ v0.1.0 is tagged only after the defaults are confirmed on real data (owner decis
    `uv lock`; move the "Unreleased" section of [CHANGELOG.md](../CHANGELOG.md) under the
    version and date.
 6. PR, review, merge to `main`.
-7. `git tag -a v0.1.0 -m "SessionScribe 0.1.0"` on the merge commit, `git push --tags`.
+7. `git tag -a v0.1.0 -m "Local TTRPG Recorder 0.1.0"` on the merge commit, `git push --tags`.
 8. The `Install` workflow runs on the tag: green on Windows and Ubuntu.
 9. GitHub release from the tag with the CHANGELOG section as notes.
 10. Follow [INSTALL.md](INSTALL.md) once on a second machine or a fresh folder.
@@ -43,3 +43,10 @@ v0.1.0 is tagged only after the defaults are confirmed on real data (owner decis
   process dispatcher first, because the recorder, the device list and the inference check
   start `python -m ...` with `sys.executable`, which is the app itself in a frozen build;
   the ASR worker uses `multiprocessing` with `spawn` and would need `freeze_support()`.
+
+## First release after v0.1.0
+
+- Remove the deprecated `sessionscribe` / `sessionscribe-gui` aliases: `src/ttrpg_recorder/compat.py`,
+  the two `[project.scripts]` lines, `MainWindow.show_deprecated_alias` with its
+  translation, `tests/test_compat.py` and the alias step in `.github/workflows/install.yml`.
+  Keep the settings-folder and preferences migration (it costs nothing and helps late updaters).

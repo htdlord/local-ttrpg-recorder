@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from sessionscribe.core.audio import control
+from ttrpg_recorder.core.audio import control
 
 
 def test_events_rotate_and_a_late_reader_misses_nothing_recent(tmp_path):

@@ -6,12 +6,12 @@ import time
 import numpy as np
 import pytest
 
-from sessionscribe.core.audio import recorder as rec
-from sessionscribe.core.audio.manifest import file_sha256
-from sessionscribe.core.audio.recorder import Recorder, RecorderConfig, RecorderError
-from sessionscribe.core.audio.track import VirtualTrack
-from sessionscribe.core.session import Session
 from tests.fake_stream import FakeOpener, Scenario
+from ttrpg_recorder.core.audio import recorder as rec
+from ttrpg_recorder.core.audio.manifest import file_sha256
+from ttrpg_recorder.core.audio.recorder import Recorder, RecorderConfig, RecorderError
+from ttrpg_recorder.core.audio.track import VirtualTrack
+from ttrpg_recorder.core.session import Session
 
 RATE = 48_000
 
@@ -183,9 +183,9 @@ def test_existing_recording_session_is_not_overwritten(tmp_path):
 
 
 def test_manifest_gaps_reach_the_transcript(tmp_path):
-    from sessionscribe.core.config import load_settings
-    from sessionscribe.core.pipeline.run import process_session
     from tests.fakes import FakeFactory
+    from ttrpg_recorder.core.config import load_settings
+    from ttrpg_recorder.core.pipeline.run import process_session
 
     cfg = config(tmp_path)
     opener = FakeOpener([Scenario(blocks=200, adc_jump_at=100, adc_jump_s=0.05)])
@@ -202,6 +202,6 @@ def test_manifest_gaps_reach_the_transcript(tmp_path):
     assert [g.reason for g in result.gaps] == ["input_overflow"]
     # (the overlaps_gap flag itself is covered in test_merge_quality; here the padded
     # silence may split the fake engine's segment exactly at the gap)
-    from sessionscribe.core.exporters.formats import to_md
+    from ttrpg_recorder.core.exporters.formats import to_md
 
     assert "Recording gaps" in to_md(result) and "input_overflow" in to_md(result)

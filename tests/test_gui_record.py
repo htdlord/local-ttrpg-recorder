@@ -8,24 +8,24 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QSettings
 
-from sessionscribe.core.audio import control
-from sessionscribe.core.audio.recovery import verify
-from sessionscribe.gui.audio_preview import PreviewPlayer
-from sessionscribe.gui.main_window import MainWindow
-from sessionscribe.gui.models import recording as rm
-from sessionscribe.gui.state import AppState
 from tests.test_gui import FakeSink
 from tests.test_record_child import ROOT, kill, rig, status
+from ttrpg_recorder.core.audio import control
+from ttrpg_recorder.core.audio.recovery import verify
+from ttrpg_recorder.gui.audio_preview import PreviewPlayer
+from ttrpg_recorder.gui.main_window import MainWindow
+from ttrpg_recorder.gui.models import recording as rm
+from ttrpg_recorder.gui.state import AppState
 
 DEVICES = [{"name": "Fake UMC", "host_api": "ASIO", "channels": 8, "samplerate": 48000}]
 
 
 @pytest.fixture
 def fake_audio(tmp_path, monkeypatch):
-    monkeypatch.setenv("SESSIONSCRIBE_TEST_OPENER", "tests.fake_stream:child_opener")
-    monkeypatch.setenv("SESSIONSCRIBE_TEST_DEVICES", json.dumps(DEVICES))
+    monkeypatch.setenv("TTRPG_RECORDER_TEST_OPENER", "tests.fake_stream:child_opener")
+    monkeypatch.setenv("TTRPG_RECORDER_TEST_DEVICES", json.dumps(DEVICES))
     # the fake voices follow the recorder's default mic-check timing (5 s quiet, 5 s turns)
-    monkeypatch.setenv("SESSIONSCRIBE_TEST_TURN_S", "5")
+    monkeypatch.setenv("TTRPG_RECORDER_TEST_TURN_S", "5")
     monkeypatch.setenv("PYTHONPATH", str(ROOT))
     monkeypatch.chdir(ROOT)
     yield
@@ -37,7 +37,7 @@ def fake_audio(tmp_path, monkeypatch):
 
 def window(qtbot, tmp_path, scenario="steady", monkeypatch=None):
     if monkeypatch is not None:
-        monkeypatch.setenv("SESSIONSCRIBE_TEST_SCENARIO", scenario)
+        monkeypatch.setenv("TTRPG_RECORDER_TEST_SCENARIO", scenario)
     prefs = QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat)
     w = MainWindow(AppState(), prefs, PreviewPlayer(sink_factory=FakeSink))
     w.confirm_close = lambda: True

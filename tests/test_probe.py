@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.audio.probe import (
+from ttrpg_recorder.core.audio.probe import (
     ProbeEngine,
     ProbeReport,
     TimestampMonitor,

@@ -2,9 +2,9 @@ from dataclasses import replace
 
 import pytest
 
-from sessionscribe.core import quality as q
-from sessionscribe.core.config import QualitySettings
-from sessionscribe.core.merge import (
+from ttrpg_recorder.core import quality as q
+from ttrpg_recorder.core.config import QualitySettings
+from ttrpg_recorder.core.merge import (
     BOUNDARY_DUPLICATE,
     RecordingGap,
     TrackInput,
@@ -12,8 +12,8 @@ from sessionscribe.core.merge import (
     merge_tracks,
     segment_id,
 )
-from sessionscribe.core.pipeline.asr import Segment, SpeechInterval, Word
-from sessionscribe.core.pipeline.chunks import KeptSegment
+from ttrpg_recorder.core.pipeline.asr import Segment, SpeechInterval, Word
+from ttrpg_recorder.core.pipeline.chunks import KeptSegment
 
 R = 48_000
 QS = QualitySettings()

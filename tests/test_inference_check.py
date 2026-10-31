@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sessionscribe.core import inference_check
-from sessionscribe.core.inference_check import run_inference_check_subprocess, synthetic_audio
+from ttrpg_recorder.core import inference_check
+from ttrpg_recorder.core.inference_check import run_inference_check_subprocess, synthetic_audio
 
 
 def test_synthetic_audio_is_deterministic_16k_float32():

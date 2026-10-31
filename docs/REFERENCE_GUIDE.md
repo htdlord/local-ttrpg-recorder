@@ -1,7 +1,7 @@
 # Reference transcripts
 
 A reference transcript says what each participant actually said: who, from when to
-when, and what. The benchmark (`sessionscribe bench run`) scores ASR output against it.
+when, and what. The benchmark (`ttrpg bench run`) scores ASR output against it.
 References are made from real recordings, so **they are personal data**: they live in
 the git-ignored `bench/refs/` folder and must never be committed, pasted into issues or
 logged. The `bench` commands print counts, ids and numbers only.
@@ -19,7 +19,7 @@ The triage reference does not correct any text. It records, segment by segment, 
 1. The clip folder needs `clip.toml` and `tracks/` (see "Clip folder" below).
 2. Open a terminal (not a redirected one) and run:
    ```bash
-   uv run sessionscribe bench ref triage bench/refs/clip01
+   uv run ttrpg bench ref triage bench/refs/clip01
    ```
    The first run transcribes the clip with bleed handling **off**, using the default settings and the clip's language. It takes a GPU minute or two and is cached in the clip's `work/` folder. Every segment of that output, plus every "possible missed speech" stretch, becomes one *unit*.
 3. Each unit is shown on one line and played from its own track with 0.3 s of context:
@@ -72,7 +72,7 @@ Use `x` (the loudest other track) or `m` (all mixed) to check whether the other 
 ### Scoring
 
 ```bash
-uv run sessionscribe bench triage score bench/refs/clip01 work/m3/clip01.json
+uv run ttrpg bench triage score bench/refs/clip01 work/m3/clip01.json
 ```
 
 This reads a session output JSON of the clip and prints numbers only:
@@ -101,13 +101,13 @@ bench/refs/clip01/
 A clip from a session recorded with `record start` (segment folders, offsets) is cut in one step; it writes `tracks/` (24-bit FLAC, every track covering the same session time) and `clip.toml` with the participants' names:
 
 ```bash
-uv run sessionscribe bench clip cut bench/refs/clip02 --session recordings/2026-11-05     --start 1:23:00 --minutes 5 --language hu
+uv run ttrpg bench clip cut bench/refs/clip02 --session recordings/2026-11-05     --start 1:23:00 --minutes 5 --language hu
 ```
 
 For tracks prepared by hand, `clip.toml` is generated from the track file names:
 
 ```bash
-uv run sessionscribe bench clip init bench/refs/clip01 --language hu \
+uv run ttrpg bench clip init bench/refs/clip01 --language hu \
     --names-from bench/refs/clip01/source/session.jsonl
 ```
 
@@ -115,13 +115,13 @@ uv run sessionscribe bench clip init bench/refs/clip01 --language hu \
 
 ```bash
 C=bench/refs/clip01
-uv run sessionscribe bench ref import $C   # existing transcript -> draft/import.json
-uv run sessionscribe bench ref draft $C    # our ASR (large-v3, quality) -> draft/asr.json
-uv run sessionscribe bench ref diff $C     # where the two disagree -> draft/diff.md, labels/_diff.txt
-uv run sessionscribe bench ref labels $C   # draft -> labels/<speaker>.txt + _bleed.txt
+uv run ttrpg bench ref import $C   # existing transcript -> draft/import.json
+uv run ttrpg bench ref draft $C    # our ASR (large-v3, quality) -> draft/asr.json
+uv run ttrpg bench ref diff $C     # where the two disagree -> draft/diff.md, labels/_diff.txt
+uv run ttrpg bench ref labels $C   # draft -> labels/<speaker>.txt + _bleed.txt
 # ... correct in Audacity, export labels to $C/labels/edited.txt ...
-uv run sessionscribe bench ref build $C --labels $C/labels/edited.txt
-uv run sessionscribe bench ref check $C
+uv run ttrpg bench ref build $C --labels $C/labels/edited.txt
+uv run ttrpg bench ref check $C
 ```
 
 The import never drops anything. Segments the old tool marked as duplicates are

@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from sessionscribe.core import config
-from sessionscribe.core.config import (
+from ttrpg_recorder.core import config
+from ttrpg_recorder.core.config import (
     Settings,
     deep_merge,
     load_settings,

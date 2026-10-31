@@ -6,23 +6,23 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.bench.clip import Clip, init_clip
-from sessionscribe.core.bench.diff import compare, diff_label_lines
-from sessionscribe.core.bench.draft import import_jsonl
-from sessionscribe.core.bench.labels import (
+from ttrpg_recorder.core.bench.clip import Clip, init_clip
+from ttrpg_recorder.core.bench.diff import compare, diff_label_lines
+from ttrpg_recorder.core.bench.draft import import_jsonl
+from ttrpg_recorder.core.bench.labels import (
     build_reference,
     parse_labels,
     read_labels,
     write_label_files,
 )
-from sessionscribe.core.bench.reference import (
+from ttrpg_recorder.core.bench.reference import (
     Reference,
     Utterance,
     read_reference,
     validate_reference,
     write_reference,
 )
-from sessionscribe.core.bench.text import cer, normalize
+from ttrpg_recorder.core.bench.text import cer, normalize
 
 
 @pytest.fixture

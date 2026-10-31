@@ -4,11 +4,12 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.cache import Cache, make_key
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.pipeline.asr import AsrError, Cancelled
-from sessionscribe.core.pipeline.chunks import Chunk
-from sessionscribe.core.pipeline.worker import (
+from tests.fakes import FakeFactory
+from ttrpg_recorder.core.cache import Cache, make_key
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.pipeline.asr import AsrError, Cancelled
+from ttrpg_recorder.core.pipeline.chunks import Chunk
+from ttrpg_recorder.core.pipeline.worker import (
     AsrJob,
     InlineRunner,
     ProcessRunner,
@@ -17,7 +18,6 @@ from sessionscribe.core.pipeline.worker import (
     describe_exit,
     run_with_retry,
 )
-from tests.fakes import FakeFactory
 
 R = 48_000
 CRASH_TEXT = "0xC0000005 (access violation)" if os.name == "nt" else "SIGSEGV"

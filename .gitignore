@@ -63,5 +63,5 @@ hf_cache/
 .hf_cache/
 huggingface/
 
-# Demo session built by `sessionscribe demo` (downloaded audio)
+# Demo session built by `ttrpg demo` (downloaded audio)
 /demo/

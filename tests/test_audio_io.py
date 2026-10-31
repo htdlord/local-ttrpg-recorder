@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.audio.reader import AudioReadError, load_for_asr, read_blocks, track_info
-from sessionscribe.core.audio.resample import StreamResampler, resample
-from sessionscribe.core.timeline import (
+from ttrpg_recorder.core.audio.reader import AudioReadError, load_for_asr, read_blocks, track_info
+from ttrpg_recorder.core.audio.resample import StreamResampler, resample
+from ttrpg_recorder.core.timeline import (
     format_clock,
     rescale,
     samples_to_seconds,

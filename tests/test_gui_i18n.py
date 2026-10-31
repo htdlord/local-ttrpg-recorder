@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-GUI = Path(__file__).resolve().parents[1] / "src" / "sessionscribe" / "gui"
-TS = GUI / "i18n" / "sessionscribe_hu.ts"
+GUI = Path(__file__).resolve().parents[1] / "src" / "ttrpg_recorder" / "gui"
+TS = GUI / "i18n" / "ttrpg_recorder_hu.ts"
 
 
 def tr_literals() -> set[str]:
@@ -52,8 +52,8 @@ def test_window_starts_in_hungarian(qtbot, tmp_path):
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication
 
-    from sessionscribe.gui import i18n
-    from sessionscribe.gui.main_window import MainWindow
+    from ttrpg_recorder.gui import i18n
+    from ttrpg_recorder.gui.main_window import MainWindow
 
     app = QApplication.instance()
     assert i18n.install(app, "hu") == "hu"

@@ -1,7 +1,7 @@
 import json
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.exporters.formats import (
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.exporters.formats import (
     output_stem,
     to_json,
     to_md,
@@ -10,11 +10,11 @@ from sessionscribe.core.exporters.formats import (
     to_vtt,
     write_session_outputs,
 )
-from sessionscribe.core.merge import RecordingGap, TrackInput, merge_tracks
-from sessionscribe.core.pipeline.asr import Segment, Word
-from sessionscribe.core.pipeline.chunks import KeptSegment
-from sessionscribe.core.result import SessionResult
-from sessionscribe.core.session import Participant
+from ttrpg_recorder.core.merge import RecordingGap, TrackInput, merge_tracks
+from ttrpg_recorder.core.pipeline.asr import Segment, Word
+from ttrpg_recorder.core.pipeline.chunks import KeptSegment
+from ttrpg_recorder.core.result import SessionResult
+from ttrpg_recorder.core.session import Participant
 
 R = 48_000
 

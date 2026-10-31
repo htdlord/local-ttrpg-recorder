@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from sessionscribe.core.config import load_settings
-from sessionscribe.core.pipeline.run import export_session, process_session
-from sessionscribe.core.session import Participant, Session, SessionConfig, write_session
+from ttrpg_recorder.core.config import load_settings
+from ttrpg_recorder.core.pipeline.run import export_session, process_session
+from ttrpg_recorder.core.session import Participant, Session, SessionConfig, write_session
 
 pytestmark = pytest.mark.slow
 R = 48_000

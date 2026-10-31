@@ -4,8 +4,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from sessionscribe.core.pipeline.asr import Segment, Word
-from sessionscribe.core.pipeline.chunks import (
+from ttrpg_recorder.core.pipeline.asr import Segment, Word
+from ttrpg_recorder.core.pipeline.chunks import (
     Chunk,
     keep_owned,
     plan_chunks,

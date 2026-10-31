@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository. Read `docs/SPEC.md` be
 
 ## Project
 
-**SessionScribe** (working title): a local, multi-track speech-to-text app built on faster-whisper. Primary use case: tabletop RPG sessions recorded with one lavalier mic per participant (up to 8 participants, sessions of 5–6.5 hours, designed for 8). Each participant's track is transcribed separately, cross-track bleed is handled, and all segments are merged into one speaker-labelled, timestamped transcript.
+**Local TTRPG Recorder** (named SessionScribe until 2026-10-31; distribution `local-ttrpg-recorder`, package `ttrpg_recorder`, commands `ttrpg` / `ttrpg-gui`; the old `sessionscribe` / `sessionscribe-gui` commands are deprecated aliases until after v0.1.0): a local, multi-track speech-to-text app built on faster-whisper. Primary use case: tabletop RPG sessions recorded with one lavalier mic per participant (up to 8 participants, sessions of 5–6.5 hours, designed for 8). Each participant's track is transcribed separately, cross-track bleed is handled, and all segments are merged into one speaker-labelled, timestamped transcript.
 
 - Reference machine: Ryzen 9 5900X (12C/24T), RTX 4070 Ti Super (16 GB VRAM), Behringer UMC1820.
 - Platforms: Windows 10/11 and Linux.
@@ -35,17 +35,17 @@ uv run pre-commit install
 uv run ruff check . && uv run ruff format .
 uv run pytest -m "not gpu and not slow and not audio_hw"   # fast suite = CI
 uv run pytest -m gpu                                       # local, needs CUDA
-uv run sessionscribe doctor                                # environment check
-uv run sessionscribe record-probe --channels 1-8 --minutes 30
-uv run sessionscribe bench run --refs bench/refs           # local reference set
-uv run sessionscribe --help
-uv run sessionscribe-gui
+uv run ttrpg doctor                                # environment check
+uv run ttrpg record-probe --channels 1-8 --minutes 30
+uv run ttrpg bench run --refs bench/refs           # local reference set
+uv run ttrpg --help
+uv run ttrpg-gui
 ```
 
 ## Architecture rules
 
 ```
-src/sessionscribe/
+src/ttrpg_recorder/
   core/                # no Qt imports, ever
     config.py          # settings, presets, schema_version + migrations, mode-aware param metadata
     timeline.py        # integer-sample session timeline, offsets, conversions

@@ -4,8 +4,8 @@ import sys
 import threading
 from pathlib import Path
 
-from sessionscribe.core.audio.recorder import Recorder, RecorderConfig
 from tests.fake_stream import FakeOpener, Scenario
+from ttrpg_recorder.core.audio.recorder import Recorder, RecorderConfig
 
 if __name__ == "__main__":
     folder = Path(sys.argv[1])

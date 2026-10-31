@@ -1,12 +1,12 @@
-from sessionscribe.core.bench import triage as t
-from sessionscribe.core.bench.bleed import (
+from tests.fakes import FakeFactory
+from tests.test_triage import IDENTITY, make_clip
+from ttrpg_recorder.core.bench import triage as t
+from ttrpg_recorder.core.bench.bleed import (
     Variant,
     default_variants,
     results_markdown,
     run_bleed_matrix,
 )
-from tests.fakes import FakeFactory
-from tests.test_triage import IDENTITY, make_clip
 
 
 def test_default_variants():

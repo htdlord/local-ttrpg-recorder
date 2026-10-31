@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from sessionscribe.core.audio.ringbuffer import RingBuffer
+from ttrpg_recorder.core.audio.ringbuffer import RingBuffer
 
 
 def frames(start: int, n: int, channels: int = 2) -> np.ndarray:

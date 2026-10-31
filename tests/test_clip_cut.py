@@ -4,9 +4,9 @@ import numpy as np
 import soundfile as sf
 from typer.testing import CliRunner
 
-from sessionscribe.cli import app
-from sessionscribe.core.bench.clip import Clip, cut_clip
-from sessionscribe.core.session import Session, SessionConfig, write_session
+from ttrpg_recorder.cli import app
+from ttrpg_recorder.core.bench.clip import Clip, cut_clip
+from ttrpg_recorder.core.session import Session, SessionConfig, write_session
 
 R = 48_000
 MARK_S = 7.0  # session time of a pulse on every track

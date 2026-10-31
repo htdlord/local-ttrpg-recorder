@@ -1,7 +1,7 @@
 [project]
-name = "sessionscribe"
+name = "local-ttrpg-recorder"
 version = "0.0.1"
-description = "Local multi-track speech-to-text for tabletop RPG sessions, built on faster-whisper"
+description = "Local TTRPG Recorder: multi-track recording and speech-to-text for tabletop RPG sessions, built on faster-whisper"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -39,8 +39,11 @@ cuda = [
 gui = ["PySide6>=6.7"]
 
 [project.scripts]
-sessionscribe = "sessionscribe.cli:app"
-sessionscribe-gui = "sessionscribe.gui.app:main"
+ttrpg = "ttrpg_recorder.cli:app"
+ttrpg-gui = "ttrpg_recorder.gui.app:main"
+# Deprecated names from before the rename; removed in the first release after v0.1.0.
+sessionscribe = "ttrpg_recorder.compat:old_cli"
+sessionscribe-gui = "ttrpg_recorder.compat:old_gui"
 
 [dependency-groups]
 dev = [
@@ -55,6 +58,10 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.9,<0.14"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# The distribution is local-ttrpg-recorder (as the repository); the import package is shorter.
+module-name = "ttrpg_recorder"
 
 [tool.ruff]
 line-length = 100
@@ -79,7 +86,7 @@ markers = [
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["sessionscribe"]
+packages = ["ttrpg_recorder"]
 mypy_path = "src"
 ignore_missing_imports = true
 warn_unused_ignores = true

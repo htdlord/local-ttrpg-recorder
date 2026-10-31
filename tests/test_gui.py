@@ -10,11 +10,11 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QSettings
 
-from sessionscribe.core.session import Session
-from sessionscribe.gui.audio_preview import PreviewPlayer
-from sessionscribe.gui.main_window import MainWindow
-from sessionscribe.gui.state import AppState
 from tests.fakes import FakeFactory, SlowFactory
+from ttrpg_recorder.core.session import Session
+from ttrpg_recorder.gui.audio_preview import PreviewPlayer
+from ttrpg_recorder.gui.main_window import MainWindow
+from ttrpg_recorder.gui.state import AppState
 
 R = 48_000
 IDENTITY = {"id": "fake", "revision": "r1", "device": "cpu", "compute_type": "int8"}
@@ -181,7 +181,7 @@ def test_theme_switch_rebuilds_the_window(qtbot, tmp_path):
 
 
 def test_superseded_export_and_close_leave_no_running_thread(qtbot, tmp_path):
-    from sessionscribe.gui import workers
+    from ttrpg_recorder.gui import workers
 
     w, state = window(qtbot, tmp_path)
     first = recordings(tmp_path / "a", n=2)
@@ -207,7 +207,7 @@ def test_file_buttons_open_their_dialogs(qtbot, tmp_path, monkeypatch):
     """Clicked through the real buttons: clicked(bool) must not reach the path argument."""
     from PySide6.QtWidgets import QFileDialog
 
-    from sessionscribe.gui.tabs import settings_tab
+    from ttrpg_recorder.gui.tabs import settings_tab
 
     w, state = window(qtbot, tmp_path)
     folder = recordings(tmp_path / "rec", n=2)
@@ -237,7 +237,7 @@ def test_file_buttons_open_their_dialogs(qtbot, tmp_path, monkeypatch):
 def test_closing_during_a_run_does_not_hang(qtbot, tmp_path):
     import time
 
-    from sessionscribe.gui import workers
+    from ttrpg_recorder.gui import workers
 
     w, _ = window(qtbot, tmp_path, factory=SlowFactory(0.4))
     w.session_tab.new_from_folder(recordings(tmp_path / "rec", n=3, seconds=12.0))
@@ -252,7 +252,7 @@ def test_closing_during_a_run_does_not_hang(qtbot, tmp_path):
 def test_every_advanced_setting_has_a_title_and_its_toml_key(qtbot, tmp_path):
     from PySide6.QtWidgets import QLabel
 
-    from sessionscribe.gui.models.settings_form import field_specs
+    from ttrpg_recorder.gui.models.settings_form import field_specs
 
     w, _ = window(qtbot, tmp_path)
     titles = w.settings_tab.field_titles()
@@ -264,7 +264,7 @@ def test_every_advanced_setting_has_a_title_and_its_toml_key(qtbot, tmp_path):
 
 
 def test_tooltips_are_the_core_descriptions_and_go_through_tr(qtbot, tmp_path):
-    from sessionscribe.gui.models.settings_form import field_specs
+    from ttrpg_recorder.gui.models.settings_form import field_specs
 
     w, _ = window(qtbot, tmp_path)
     tips = w.settings_tab.field_tips()
@@ -275,7 +275,7 @@ def test_tooltips_are_the_core_descriptions_and_go_through_tr(qtbot, tmp_path):
 
 
 def test_about_shows_versions_and_opens_the_local_notices(qtbot, tmp_path):
-    from sessionscribe import __version__
+    from ttrpg_recorder import __version__
 
     w, _ = window(qtbot, tmp_path)
     dialog = w.about()
