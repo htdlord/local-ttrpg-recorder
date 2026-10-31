@@ -6,11 +6,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
-from PySide6.QtCore import QSettings, QThread
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
+from PySide6.QtCore import QSettings, QThread, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QHBoxLayout,
     QHeaderView,
     QMainWindow,
     QMessageBox,
@@ -34,6 +35,64 @@ from sessionscribe.gui.workers import DoctorWorker, ProcessWorker, start
 
 ORG = "SessionScribe"
 MAX_RECENT = 8
+NOTICES = "THIRD_PARTY_NOTICES.md"
+NOTICES_URL = "https://github.com/htdlord/sessionscribe/blob/main/" + NOTICES
+
+
+def notices_url() -> QUrl:
+    """The notices next to a source checkout, else on GitHub."""
+    path = Path(__file__).resolve().parents[3] / NOTICES
+    return QUrl.fromLocalFile(str(path)) if path.is_file() else QUrl(NOTICES_URL)
+
+
+class AboutDialog(QDialog):
+    """Version, licences (own MIT, third-party notices, Qt) and the privacy note."""
+
+    def __init__(self, parent: Any, tokens: Any) -> None:
+        from importlib.metadata import version
+
+        import PySide6
+
+        from sessionscribe import __version__
+
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("About SessionScribe"))
+        self.open_url: Callable[[QUrl], bool] = QDesktopServices.openUrl
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 16)
+        layout.setSpacing(8)
+        layout.addWidget(label(f"SessionScribe {__version__}", heading=True))
+        libs = [f"{name} {version(name)}" for name in ("faster-whisper", "ctranslate2")]
+        libs.append(f"PySide6 {PySide6.__version__}")
+        self.versions = label(", ".join(libs), muted=True)
+        layout.addWidget(self.versions)
+        for text in (
+            self.tr("Local multi-track speech-to-text for tabletop RPG sessions."),
+            self.tr(
+                "Own code: MIT licence. Third-party packages keep their own licences; "
+                "PySide6/Qt is LGPLv3 and installed as replaceable libraries."
+            ),
+            self.tr(
+                "Participants' voices are personal data: whoever records is responsible "
+                "for informing participants and obtaining consent where required."
+            ),
+        ):
+            note = label(text)
+            note.setWordWrap(True)
+            layout.addWidget(note)
+        row = QHBoxLayout()
+        self.notices_btn = button(self.tr("Third-party notices"), tokens)
+        self.notices_btn.clicked.connect(lambda: self.open_url(notices_url()))
+        about_qt = button(self.tr("About Qt"), tokens)
+        about_qt.clicked.connect(lambda: QMessageBox.aboutQt(self))
+        close = button(self.tr("Close"), tokens, primary=True)
+        close.clicked.connect(self.accept)
+        row.addWidget(self.notices_btn)
+        row.addWidget(about_qt)
+        row.addStretch(1)
+        row.addWidget(close)
+        layout.addLayout(row)
+        self.resize(520, 0)
 
 
 class SystemCheckDialog(QDialog):
@@ -170,6 +229,15 @@ class MainWindow(QMainWindow):
                 ("hu", "Magyar"),
             ),
         )
+
+        help_menu = bar.addMenu(self.tr("&Help"))
+        about = help_menu.addAction(self.tr("About SessionScribe…"))
+        about.triggered.connect(self.about)
+
+    def about(self) -> AboutDialog:
+        dialog = AboutDialog(self, self.tokens)
+        dialog.open()
+        return dialog
 
     def _choice_menu(self, menu: Any, key: str, choices: tuple[tuple[str, str], ...]) -> None:
         group = QActionGroup(menu)
